@@ -151,8 +151,12 @@ end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
-        r = range(tokens[c,i])
-        col[end-nvals+i] = unsafe_string(mem.ptr + first(r) - 1, length(r))
+        start, stop = bounds(tokens[c,i])
+        while stop ≥ start && mem[stop] == UInt8(' ')
+            # trim trailing space
+            stop -= 1
+        end
+        col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
     end
     return col
 end
@@ -160,7 +164,7 @@ end
 # Read header and return column names.
 function readheader(stream::TranscodingStream, delim::UInt8)
     header = readline(stream)
-    return Symbol.(split(header, Char(delim)))
+    return [Symbol(strip(x)) for x in split(header, Char(delim))]
 end
 
 mutable struct ParserState
