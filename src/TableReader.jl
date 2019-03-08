@@ -41,6 +41,7 @@ const STRING = UInt8(0)
 const INTEGER = UInt8(1) << 0
 #const FLOAT   = UInt8(1) << 1
 #const BOOL    = UInt8(1) << 2
+const ANY = STRING | INTEGER
 
 struct Token
     # From most significant
@@ -98,7 +99,7 @@ function readtsv(
             resize!(columns, ncols)
             # infer data types of columns
             for i in 1:ncols
-                parsable = INTEGER
+                parsable = ANY
                 for j in 1:n_new_records
                     parsable &= kind(tokens[i,j])
                 end
@@ -109,8 +110,19 @@ function readtsv(
                     columns[i] = String[]
                 end
             end
+        else
+            for i in 1:ncols
+                parsable = ANY
+                for j in 1:n_new_records
+                    parsable &= kind(tokens[i,j])
+                end
+                if columns[i] isa Vector{Int}
+                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed"))
+                else
+                    @assert columns[i] isa Vector{String}
+                end
+            end
         end
-        # TODO: check that columns are really parsable
         for i in 1:ncols
             col = columns[i]
             resize!(col, length(col) + n_new_records)
