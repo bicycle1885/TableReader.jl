@@ -54,6 +54,11 @@ function range(token::Token)
     return (x >> 30) % Int : (x & (~UInt64(0) >> 34)) % Int
 end
 
+function bounds(token::Token)
+    x = token.value & (~UInt64(0) >> 4)
+    return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
+end
+
 function readtsv(stream::TranscodingStream)
     delim = UInt8('\t')
     colnames = readheader(stream, delim)
@@ -117,9 +122,31 @@ end
 
 function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
-        col[end-nvals+i] = parse_integer(mem, range(tokens[c,i]))
+        start, stop = bounds(tokens[c,i])
+        col[end-nvals+i] = parse_integer(mem, start, stop)
     end
     return col
+end
+
+@inline function parse_integer(mem::Memory, start::Int, stop::Int)
+    i = start
+    b = mem[start]
+    if b == UInt8('-')
+        sign = -1
+        i += 1
+    elseif b == UInt8('+')
+        sign = +1
+        i += 1
+    else
+        sign = +1
+    end
+    n::Int = 0
+    while i ≤ stop
+        @inbounds b = mem[i]
+        n = 10n + (b - UInt8('0'))
+        i += 1
+    end
+    return sign * n
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
@@ -134,15 +161,6 @@ end
 function readheader(stream::TranscodingStream, delim::UInt8)
     header = readline(stream)
     return Symbol.(split(header, Char(delim)))
-end
-
-@inline function parse_integer(mem, range)
-    n::Int = 0
-    for i in range
-        @inbounds b = mem[i]
-        n = 10n + (b - UInt8('0'))
-    end
-    return n
 end
 
 mutable struct ParserState
