@@ -3,6 +3,11 @@ using Test
 
 @testset "readtsv" begin
     @testset "simple" begin
+        # empty
+        buffer = IOBuffer("")
+        df = readtsv(buffer)
+        @test isempty(names(df))
+
         # integers
         buffer = IOBuffer("""
         col1\tcol2\tcol3

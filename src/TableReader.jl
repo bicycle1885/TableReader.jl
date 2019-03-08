@@ -63,7 +63,9 @@ function readtsv(stream::TranscodingStream)
     delim = UInt8('\t')
     colnames = readheader(stream, delim)
     ncols = length(colnames)
-    @assert ncols > 0
+    if ncols == 0
+        return DataFrame()
+    end
     fillbuffer(stream)
     tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
     #fill!(tokens, Token(0x00, 0, 0))
@@ -164,6 +166,9 @@ end
 # Read header and return column names.
 function readheader(stream::TranscodingStream, delim::UInt8)
     header = readline(stream)
+    if all(isequal(' '), header)
+        return Symbol[]
+    end
     return [Symbol(strip(x)) for x in split(header, Char(delim))]
 end
 
