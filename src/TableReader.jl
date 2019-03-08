@@ -12,20 +12,26 @@ using TranscodingStreams:
     fillbuffer
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
+const DEFAULT_TRIM = true
 const MAX_BUFFERED_ROWS = 100
 
 function readtsv(
-        filename::AbstractString,
+        filename::AbstractString;
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
+        trim::Bool = DEFAULT_TRIM
     )
-    return open(readtsv, filename, bufsize = bufsize)
+    return open(readtsv, filename, bufsize = bufsize, trim = trim)
 end
 
 function readtsv(
         file::IO;
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
+        trim::Bool = DEFAULT_TRIM
     )
-    return readtsv(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE))
+    return readtsv(
+        NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE),
+        trim = trim,
+    )
 end
 
 const STRING = UInt8(0)
@@ -59,9 +65,12 @@ function bounds(token::Token)
     return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
 end
 
-function readtsv(stream::TranscodingStream)
+function readtsv(
+        stream::TranscodingStream;
+        trim::Bool = DEFAULT_TRIM,
+    )
     delim = UInt8('\t')
-    colnames = readheader(stream, delim)
+    colnames = readheader(stream, delim, trim)
     ncols = length(colnames)
     if ncols == 0
         return DataFrame()
@@ -78,7 +87,7 @@ function readtsv(stream::TranscodingStream)
         pos = 0
         block_begin = line
         while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
-            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim)
+            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim, trim)
             line += 1
         end
         n_new_records = line - block_begin
@@ -102,7 +111,7 @@ function readtsv(stream::TranscodingStream)
         for i in 1:ncols
             col = columns[i]
             resize!(col, length(col) + n_new_records)
-            fillcolumn!(col, n_new_records, mem, tokens, i)
+            fillcolumn!(col, n_new_records, mem, tokens, i, trim)
         end
         skip(stream, pos)
     end
@@ -122,7 +131,7 @@ function find_last_newline(mem::Memory)
     return i
 end
 
-function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, trim::Bool)
     for i in 1:nvals
         start, stop = bounds(tokens[c,i])
         col[end-nvals+i] = parse_integer(mem, start, stop)
@@ -151,12 +160,14 @@ end
     return sign * n
 end
 
-function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, trim::Bool)
     for i in 1:nvals
         start, stop = bounds(tokens[c,i])
-        while stop ≥ start && mem[stop] == UInt8(' ')
+        if trim
             # trim trailing space
-            stop -= 1
+            while stop ≥ start && mem[stop] == UInt8(' ')
+                stop -= 1
+            end
         end
         col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
     end
@@ -164,12 +175,12 @@ function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matri
 end
 
 # Read header and return column names.
-function readheader(stream::TranscodingStream, delim::UInt8)
+function readheader(stream::TranscodingStream, delim::UInt8, trim::Bool)
     header = readline(stream)
     if all(isequal(' '), header)
         return Symbol[]
     end
-    return [Symbol(strip(x)) for x in split(header, Char(delim))]
+    return [Symbol(trim ? strip(x) : x) for x in split(header, Char(delim))]
 end
 
 mutable struct ParserState
@@ -213,8 +224,14 @@ macro endtoken()
 end
 
 # Scan a line in mem; mem must include one or more lines.
-function scanline!(tokens::Matrix{Token}, row::Int,
-                   mem::Memory, pos::Int, lastnl::Int, line::Int, delim::UInt8)
+function scanline!(
+        # output info
+        tokens::Matrix{Token}, row::Int,
+        # input info
+        mem::Memory, pos::Int, lastnl::Int, line::Int,
+        # parser parameters
+        delim::UInt8, trim::Bool
+    )
     @assert delim ∈ (UInt8('\t'), UInt8(';'), UInt8('|'),)
     pos_end = lastnl
     token = 0  # the starting position of a token
@@ -228,7 +245,12 @@ function scanline!(tokens::Matrix{Token}, row::Int,
         @begintoken
         @goto INTEGER
     elseif c == UInt8(' ')
-        @goto BEGIN
+        if trim
+            @goto BEGIN
+        else
+            @begintoken
+            @goto STRING
+        end
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @begintoken
         @goto STRING
@@ -260,9 +282,13 @@ function scanline!(tokens::Matrix{Token}, row::Int,
         @endtoken
         @goto BEGIN
     elseif c == UInt8(' ')
-        @recordtoken INTEGER
-        @goto INTEGER_SPACE
-    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+        if trim
+            @recordtoken INTEGER
+            @goto INTEGER_SPACE
+        else
+            @goto STRING
+        end
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
         @recordtoken INTEGER
@@ -276,7 +302,7 @@ function scanline!(tokens::Matrix{Token}, row::Int,
     elseif c == delim
         @endtoken
         @goto BEGIN
-    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
         @goto END

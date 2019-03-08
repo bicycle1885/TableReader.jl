@@ -37,24 +37,39 @@ using Test
 
     @testset "trimming" begin
         # trimming space
-        buffer = IOBuffer("""
+        data = """
         col1\tcol2\tcol3
         1   \t   2\t   3
            4\t   5\t   6
           7 \t 8  \t 9  
-        """)
-        df = readtsv(buffer)
+        """
+        df = readtsv(IOBuffer(data))
         @test df[:col1] == [1, 4, 7]
         @test df[:col2] == [2, 5, 8]
         @test df[:col3] == [3, 6, 9]
 
-        buffer = IOBuffer("""
+        df = readtsv(IOBuffer(data); trim = true)
+        @test df[:col1] == [1, 4, 7]
+        @test df[:col2] == [2, 5, 8]
+        @test df[:col3] == [3, 6, 9]
+
+        df = readtsv(IOBuffer(data); trim = false)
+        @test df[:col1] == ["1   ", "   4", "  7 "]
+        @test df[:col2] == ["   2", "   5", " 8  "]
+        @test df[:col3] == ["   3", "   6", " 9  "]
+
+        data = """
          col1  \t col2 \t col3  
          foo   \t  b  \t baz
-        """)
-        df = readtsv(buffer)
+        """
+        df = readtsv(IOBuffer(data); trim = true)
         @test df[:col1] == ["foo"]
         @test df[:col2] == ["b"]
         @test df[:col3] == ["baz"]
+
+        df = readtsv(IOBuffer(data); trim = false)
+        @test df[Symbol(" col1  ")] == [" foo   "]
+        @test df[Symbol(" col2 ")] == ["  b  "]
+        @test df[Symbol(" col3  ")] == [" baz"]
     end
 end
