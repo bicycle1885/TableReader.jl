@@ -5,11 +5,12 @@ export readtsv
 using DataFrames:
     DataFrame
 using TranscodingStreams:
+    TranscodingStreams,
     TranscodingStream,
     NoopStream,
     Memory,
-    buffermem,
-    fillbuffer
+    Buffer,
+    buffermem
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
 const DEFAULT_TRIM = true
@@ -20,7 +21,9 @@ function readtsv(
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
         trim::Bool = DEFAULT_TRIM
     )
-    return open(readtsv, filename, bufsize = bufsize, trim = trim)
+    return open(filename) do file
+        readtsv(file, bufsize = bufsize, trim = trim)
+    end
 end
 
 function readtsv(
@@ -81,9 +84,9 @@ function readtsv(
     n_block_rows = size(tokens, 2)
     columns = Vector[]
     line = 2
-    while !eof(stream)
-        mem = buffermem(stream.state.buffer1)
-        lastnl = find_last_newline(mem)
+    #while !eof(stream)
+    while (fillbuffer(stream); mem = buffermem(stream.state.buffer1); lastnl = find_last_newline(mem)) > 0
+        #@show length(stream.state.buffer1.data)
         pos = 0
         block_begin = line
         while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
@@ -116,6 +119,44 @@ function readtsv(
         skip(stream, pos)
     end
     return DataFrame(columns, colnames)
+end
+
+function fillbuffer(stream::NoopStream)
+    TranscodingStreams.changemode!(stream, :read)
+    buffer = stream.state.buffer1
+    @assert buffer === stream.state.buffer2
+    if stream.stream isa TranscodingStream && buffer === stream.stream.state.buffer1
+        # Delegate the operation when buffers are shared.
+        return TranscodingStreams.fillbuffer(stream.stream)
+    end
+    shiftdata!(buffer)
+    nfilled::Int = 0
+    #while TranscodingStreams.buffersize(buffer) == 0 && !eof(stream.stream)
+    while TranscodingStreams.marginsize(buffer) > 0 && !eof(stream.stream)
+        #TranscodingStreams.makemargin!(buffer, 1)
+        nfilled += TranscodingStreams.readdata!(stream.stream, buffer)
+    end
+    buffer.transcoded += nfilled
+    return nfilled
+end
+
+function shiftdata!(buf::Buffer)
+    # shift data to left
+    if buf.markpos == 0
+        datapos = buf.bufferpos
+        datasize = TranscodingStreams.buffersize(buf)
+    else
+        datapos = buf.markpos
+        datasize = buf.marginpos - buf.markpos
+    end
+    copyto!(buf.data, 1, buf.data, datapos, datasize)
+    shift = datapos - 1
+    if buf.markpos > 0
+        buf.markpos -= shift
+    end
+    buf.bufferpos -= shift
+    buf.marginpos -= shift
+    return TranscodingStreams.marginsize(buf)
 end
 
 function find_last_newline(mem::Memory)
@@ -200,7 +241,6 @@ macro state(name)
             @goto END
         end
         @inbounds c = mem[pos]
-        #@show Char(c)
     end)
 end
 

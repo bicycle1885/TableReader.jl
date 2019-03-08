@@ -72,4 +72,23 @@ using Test
         @test df[Symbol(" col2 ")] == ["  b  "]
         @test df[Symbol(" col3  ")] == [" baz"]
     end
+
+    @testset "large data" begin
+        buf = IOBuffer()
+        m = 10000
+        n = 2000
+        println(buf, "name", '\t', join(("col$(j)" for j in 1:n), '\t'))
+        for i in 1:m
+            print(buf, "row$(i)")
+            for j in 1:n
+                print(buf, '\t', i)
+            end
+            println(buf)
+        end
+        df = readtsv(IOBuffer(take!(buf)))
+        @test size(df) == (m, n + 1)
+        @test df[:name] == ["row$(i)" for i in 1:m]
+        @test df[:col1] == 1:m
+        @test df[:col2] == 1:m
+    end
 end
