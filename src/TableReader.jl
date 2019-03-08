@@ -60,9 +60,8 @@ function readtsv(stream::TranscodingStream)
     ncols = length(colnames)
     @assert ncols > 0
     fillbuffer(stream)
-    #tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
-    tokens = Array{Token}(undef, (ncols, 10))
-    fill!(tokens, Token(0x00, 0, 0))
+    tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
+    #fill!(tokens, Token(0x00, 0, 0))
     n_block_rows = size(tokens, 2)
     columns = Vector[]
     line = 2
@@ -96,11 +95,7 @@ function readtsv(stream::TranscodingStream)
         for i in 1:ncols
             col = columns[i]
             resize!(col, length(col) + n_new_records)
-            if col isa Vector{Int}
-                fill_integer_column!(col, n_new_records, mem, tokens, i)
-            else
-                fill_string_column!(col::Vector{String}, n_new_records, mem, tokens, i)
-            end
+            fillcolumn!(col, n_new_records, mem, tokens, i)
         end
         skip(stream, pos)
     end
@@ -120,14 +115,14 @@ function find_last_newline(mem::Memory)
     return i
 end
 
-function fill_integer_column!(col, nvals, mem, tokens, c)
+function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
         col[end-nvals+i] = parse_integer(mem, range(tokens[c,i]))
     end
     return col
 end
 
-function fill_string_column!(col, nvals, mem, tokens, c)
+function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
         r = range(tokens[c,i])
         col[end-nvals+i] = unsafe_string(mem.ptr + first(r) - 1, length(r))
