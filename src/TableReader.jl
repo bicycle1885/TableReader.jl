@@ -60,7 +60,6 @@ end
 
 struct ReadError <: Exception
     msg::String
-    line::Int
 end
 
 macro state(name)
@@ -68,57 +67,103 @@ macro state(name)
         @label $(name)
         pos += 1
         if pos > pos_end
-            @goto ENDFILE
+            @goto END
         end
         @inbounds c = mem[pos]
         #@show Char(c)
     end)
 end
 
+macro begintoken()
+    esc(quote
+        token = pos
+    end)
+end
+
 # Scan a line in mem; mem must include one or more lines.
 function scanline!(state::ParserState, mem::Memory, delim::UInt8)
+    @assert delim ∈ (UInt8('\t'), UInt8(';'), UInt8('|'),)
     pos = 0
     pos_end = lastindex(mem)
-    pos_token = 0
-    i = 1
+    token = 0  # the starting position of a token
+    i = 1  # the current token
 
-    @state STATE_BEGIN
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        pos_token = pos
-        @goto STATE_INTEGER
+    @state BEGIN
+    if c == UInt8('-') || c == UInt8('+')
+        @begintoken
+        @goto SIGN
+    elseif UInt8('0') ≤ c ≤ UInt8('9')
+        @begintoken
+        @goto INTEGER
+    elseif c == UInt8(' ')
+        @goto BEGIN
     elseif c == UInt8('\n')
-        @goto ENDLINE
+        @goto END
     end
     @goto ERROR
 
-    @state STATE_INTEGER
+    @state SIGN
     if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto STATE_INTEGER
+        @goto INTEGER
+    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+        @goto STRING
     elseif c == delim
-        state.tokens[i] = pos_token:pos-1
+        state.tokens[i] = token:pos-1
         i += 1
-        @goto STATE_DELIM
+        @goto BEGIN
     elseif c == UInt8('\n')
-        state.tokens[i] = pos_token:pos-1
-        i += 1
-        @goto ENDLINE
+        state.tokens[i] = token:pos-1
+        @goto END
     end
     @goto ERROR
 
-    @state STATE_DELIM
+    @state INTEGER
     if UInt8('0') ≤ c ≤ UInt8('9')
-        pos_token = pos
-        @goto STATE_INTEGER
+        @goto INTEGER
+    elseif c == delim
+        state.tokens[i] = token:pos-1
+        i += 1
+        @goto BEGIN
+    elseif c == UInt8(' ')
+        state.tokens[i] = token:pos-1
+        @goto INTEGER_SPACE
+    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8('\n')
+        state.tokens[i] = token:pos-1
+        @goto END
+    end
+    @goto ERROR
+
+    @state INTEGER_SPACE
+    if c == UInt8(' ')
+        @goto INTEGER_SPACE
+    elseif c == delim
+        i += 1
+        @goto BEGIN
+    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8('\n')
+        @goto END
+    end
+    @goto ERROR
+
+    @state STRING
+    if UInt8(' ') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == delim
+        state.tokens[i] = token:pos-1
+        @goto BEGIN
+    elseif c == UInt8('\n')
+        state.tokens[i] = token:pos-1
+        @goto END
     end
     @goto ERROR
 
     @label ERROR
-    throw(ReadError("invalid file format at line $(state.line)", state.line))
+    throw(ReadError("invalid file format at line $(state.line), char $(repr(c))"))
 
-    @label ENDFILE
-    return 0
-
-    @label ENDLINE
+    @label END
     state.line += 1
     return pos
 end
