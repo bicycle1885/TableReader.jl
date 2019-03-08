@@ -8,38 +8,137 @@ using TranscodingStreams:
     TranscodingStream,
     NoopStream,
     Memory,
-    buffermem
+    buffermem,
+    fillbuffer
 
-function readtsv(filename::AbstractString)
-    return open(readtsv, filename)
+const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
+const MAX_BUFFERED_ROWS = 100
+
+function readtsv(
+        filename::AbstractString,
+        bufsize::Integer = DEFAULT_BUFFER_SIZE,
+    )
+    return open(readtsv, filename, bufsize = bufsize)
 end
 
-function readtsv(file::IO)
-    return readtsv(NoopStream(file, bufsize = 128 * 2^20))
+function readtsv(
+        file::IO;
+        bufsize::Integer = DEFAULT_BUFFER_SIZE,
+    )
+    return readtsv(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE))
+end
+
+const STRING = UInt8(0)
+const INTEGER = UInt8(1) << 0
+#const FLOAT   = UInt8(1) << 1
+#const BOOL    = UInt8(1) << 2
+
+struct Token
+    # From most significant
+    #    4bit: kind
+    #   30bit: start positin
+    #   30bit: end position
+    value::UInt64
+
+    function Token(kind::UInt8, start::Int, stop::Int)
+        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(stop))
+    end
+end
+
+function kind(token::Token)
+    return (token.value >> 60) % UInt8
+end
+
+function range(token::Token)
+    x = token.value & (~UInt64(0) >> 4)
+    return (x >> 30) % Int : (x & (~UInt64(0) >> 34)) % Int
 end
 
 function readtsv(stream::TranscodingStream)
-    header = readline(stream)
-    colnames = Symbol.(split(header, '\t'))
-    ncols = length(colnames)
-    columns = [sizehint!(Any[], 1000) for _ in 1:ncols]
-    tokens = Vector{UnitRange{Int}}(undef, ncols)
-    state = ParserState(stream, 1, columns, tokens)
     delim = UInt8('\t')
+    colnames = readheader(stream, delim)
+    ncols = length(colnames)
+    @assert ncols > 0
+    fillbuffer(stream)
+    #tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
+    tokens = Array{Token}(undef, (ncols, 10))
+    fill!(tokens, Token(0x00, 0, 0))
+    n_block_rows = size(tokens, 2)
+    columns = Vector[]
+    line = 2
     while !eof(stream)
         mem = buffermem(stream.state.buffer1)
-        Δ = scanline!(state, mem, delim)
-        if Δ == 0
-            # TODO
-            @assert false
+        lastnl = find_last_newline(mem)
+        pos = 0
+        block_begin = line
+        while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
+            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim)
+            line += 1
         end
-        for i in 1:length(tokens)
-            val = parse_integer(mem, tokens[i])
-            push!(columns[i], val)
+        n_new_records = line - block_begin
+        if isempty(columns)
+            resize!(columns, ncols)
+            # infer data types of columns
+            for i in 1:ncols
+                parsable = INTEGER
+                for j in 1:n_new_records
+                    parsable &= kind(tokens[i,j])
+                end
+                if (parsable & INTEGER) != 0
+                    columns[i] = Int[]
+                else
+                    # fall back to string
+                    columns[i] = String[]
+                end
+            end
         end
-        skip(stream, Δ)
+        # TODO: check that columns are really parsable
+        for i in 1:ncols
+            col = columns[i]
+            resize!(col, length(col) + n_new_records)
+            if col isa Vector{Int}
+                fill_integer_column!(col, n_new_records, mem, tokens, i)
+            else
+                fill_string_column!(col::Vector{String}, n_new_records, mem, tokens, i)
+            end
+        end
+        skip(stream, pos)
     end
     return DataFrame(columns, colnames)
+end
+
+function find_last_newline(mem::Memory)
+    i = lastindex(mem)
+    #while i > firstindex(mem)
+    while i > 0
+        @inbounds x = mem[i]
+        if x == UInt8('\n')
+            break
+        end
+        i -= 1
+    end
+    return i
+end
+
+function fill_integer_column!(col, nvals, mem, tokens, c)
+    for i in 1:nvals
+        col[end-nvals+i] = parse_integer(mem, range(tokens[c,i]))
+    end
+    return col
+end
+
+function fill_string_column!(col, nvals, mem, tokens, c)
+    for i in 1:nvals
+        r = range(tokens[c,i])
+        col[end-nvals+i] = unsafe_string(mem.ptr + first(r) - 1, length(r))
+    end
+    return col
+end
+
+# Read header and return column names.
+function readheader(stream::TranscodingStream, delim::UInt8)
+    header = readline(stream)
+    return Symbol.(split(header, Char(delim)))
 end
 
 @inline function parse_integer(mem, range)
@@ -54,8 +153,6 @@ end
 mutable struct ParserState
     stream::TranscodingStream
     line::Int
-    columns::Vector{Vector}
-    tokens::Vector{UnitRange{Int}}
 end
 
 struct ReadError <: Exception
@@ -80,11 +177,24 @@ macro begintoken()
     end)
 end
 
+macro recordtoken(kind)
+    esc(quote
+        @assert token > 0
+        tokens[i,row] = Token($(kind), token, pos - 1)
+    end)
+end
+
+macro endtoken()
+    esc(quote
+        i += 1
+    end)
+end
+
 # Scan a line in mem; mem must include one or more lines.
-function scanline!(state::ParserState, mem::Memory, delim::UInt8)
+function scanline!(tokens::Matrix{Token}, row::Int,
+                   mem::Memory, pos::Int, lastnl::Int, line::Int, delim::UInt8)
     @assert delim ∈ (UInt8('\t'), UInt8(';'), UInt8('|'),)
-    pos = 0
-    pos_end = lastindex(mem)
+    pos_end = lastnl
     token = 0  # the starting position of a token
     i = 1  # the current token
 
@@ -97,6 +207,9 @@ function scanline!(state::ParserState, mem::Memory, delim::UInt8)
         @goto INTEGER
     elseif c == UInt8(' ')
         @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @begintoken
+        @goto STRING
     elseif c == UInt8('\n')
         @goto END
     end
@@ -108,11 +221,11 @@ function scanline!(state::ParserState, mem::Memory, delim::UInt8)
     elseif UInt8(' ') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == delim
-        state.tokens[i] = token:pos-1
-        i += 1
+        @recordtoken STRING
+        @endtoken
         @goto BEGIN
     elseif c == UInt8('\n')
-        state.tokens[i] = token:pos-1
+        @recordtoken STRING
         @goto END
     end
     @goto ERROR
@@ -121,16 +234,16 @@ function scanline!(state::ParserState, mem::Memory, delim::UInt8)
     if UInt8('0') ≤ c ≤ UInt8('9')
         @goto INTEGER
     elseif c == delim
-        state.tokens[i] = token:pos-1
-        i += 1
+        @recordtoken INTEGER
+        @endtoken
         @goto BEGIN
     elseif c == UInt8(' ')
-        state.tokens[i] = token:pos-1
+        @recordtoken INTEGER
         @goto INTEGER_SPACE
     elseif UInt8(' ') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
-        state.tokens[i] = token:pos-1
+        @recordtoken INTEGER
         @goto END
     end
     @goto ERROR
@@ -139,7 +252,7 @@ function scanline!(state::ParserState, mem::Memory, delim::UInt8)
     if c == UInt8(' ')
         @goto INTEGER_SPACE
     elseif c == delim
-        i += 1
+        @endtoken
         @goto BEGIN
     elseif UInt8(' ') ≤ c ≤ UInt8('~')
         @goto STRING
@@ -152,19 +265,20 @@ function scanline!(state::ParserState, mem::Memory, delim::UInt8)
     if UInt8(' ') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == delim
-        state.tokens[i] = token:pos-1
+        @recordtoken STRING
+        @endtoken
         @goto BEGIN
     elseif c == UInt8('\n')
-        state.tokens[i] = token:pos-1
+        @recordtoken STRING
+        @endtoken
         @goto END
     end
     @goto ERROR
 
     @label ERROR
-    throw(ReadError("invalid file format at line $(state.line), char $(repr(c))"))
+    throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
 
     @label END
-    state.line += 1
     return pos
 end
 
