@@ -37,15 +37,16 @@ function readtsv(
     )
 end
 
-const STRING = UInt8(0)
-const INTEGER = UInt8(1) << 0
+# field kind
+const STRING  = 0b0000
+const INTEGER = 0b0001
 #const FLOAT   = UInt8(1) << 1
 #const BOOL    = UInt8(1) << 2
-const ANY = STRING | INTEGER
+const MISSING = 0b1111  # missing can be any data type
 
 struct Token
     # From most significant
-    #    4bit: kind
+    #    4bit: kind (+ missing)
     #   30bit: start positin
     #   30bit: end position
     value::UInt64
@@ -57,6 +58,10 @@ end
 
 function kind(token::Token)
     return (token.value >> 60) % UInt8
+end
+
+function ismissing(token::Token)
+    return (token.value & (UInt64(1) << 63)) != 0
 end
 
 function range(token::Token)
@@ -99,27 +104,40 @@ function readtsv(
             resize!(columns, ncols)
             # infer data types of columns
             for i in 1:ncols
-                parsable = ANY
+                parsable = 0b0111
+                hasmissing = false
                 for j in 1:n_new_records
-                    parsable &= kind(tokens[i,j])
+                    x = kind(tokens[i,j])
+                    parsable &= x
+                    hasmissing |= (x & 0b1000) != 0
                 end
                 if (parsable & INTEGER) != 0
-                    columns[i] = Int[]
+                    columns[i] = hasmissing ? Union{Int,Missing}[] : Int[]
                 else
                     # fall back to string
-                    columns[i] = String[]
+                    columns[i] = hasmissing ? Union{String,Missing}[] : String[]
                 end
             end
         else
             for i in 1:ncols
-                parsable = ANY
+                parsable = 0b0111
+                hasmissing = false
                 for j in 1:n_new_records
-                    parsable &= kind(tokens[i,j])
+                    x = kind(tokens[i,j])
+                    parsable &= x
+                    hasmissing |= (x & 0b1000) != 0
                 end
-                if columns[i] isa Vector{Int}
+                col = columns[i]
+                if col isa Vector{Int} || col isa Vector{Union{Int,Missing}}
                     (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed"))
                 else
-                    @assert columns[i] isa Vector{String}
+                    @assert col isa Vector{String} || col isa Vector{Union{String,Missing}}
+                end
+                # allow missing if any
+                if col isa Vector{Int} && hasmissing
+                    col = copyto!(Vector{Union{Int,Missing}}(undef, length(col)), col)
+                elseif col isa Vector{String} && hasmissing
+                    col = copyto!(Vector{Union{String,Missing}}(undef, length(col)), col)
                 end
             end
         end
@@ -192,6 +210,19 @@ function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{T
     return col
 end
 
+function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+    for i in 1:nvals
+        t = tokens[c,i]
+        if ismissing(t)
+            col[end-nvals+i] = missing
+        else
+            start, stop = bounds(t)
+            col[end-nvals+i] = parse_integer(mem, start, stop)
+        end
+    end
+    return col
+end
+
 @inline function parse_integer(mem::Memory, start::Int, stop::Int)
     i = start
     b = mem[start]
@@ -217,6 +248,19 @@ function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matri
     for i in 1:nvals
         start, stop = bounds(tokens[c,i])
         col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
+    end
+    return col
+end
+
+function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+    for i in 1:nvals
+        t = tokens[c,i]
+        if ismissing(t)
+            col[end-nvals+i] = missing
+        else
+            start, stop = bounds(tokens[c,i])
+            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
+        end
     end
     return col
 end
@@ -258,7 +302,7 @@ end
 
 macro recordtoken(kind)
     esc(quote
-        @assert token > 0
+        #@assert token > 0
         tokens[i,row] = Token($(kind), token, pos - 1)
     end)
 end
@@ -280,6 +324,7 @@ function scanline!(
     )
     @assert delim ∈ (UInt8('\t'), UInt8(';'), UInt8('|'),)
     pos_end = lastnl
+    ncols = size(tokens, 1)
     token = 0  # the starting position of a token
     i = 1  # the current token
 
@@ -300,7 +345,17 @@ function scanline!(
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @begintoken
         @goto STRING
+    elseif c == delim
+        @begintoken
+        @recordtoken MISSING
+        @endtoken
+        @goto BEGIN
     elseif c == UInt8('\n')
+        if i == ncols  # TODO
+            @begintoken
+            @recordtoken MISSING
+            @endtoken
+        end
         @goto END
     end
     @goto ERROR

@@ -73,6 +73,40 @@ using Test
         @test df[Symbol(" col3  ")] == [" baz"]
     end
 
+    @testset "missing" begin
+        data = """
+        col1\tcol2\tcol3
+        1\t2\t3
+        \t5\t
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] isa Vector{Union{Int,Missing}}
+        @test df[:col2] isa Vector{Int}
+        @test df[:col3] isa Vector{Union{Int,Missing}}
+        @test df[1,:col1] == 1
+        @test ismissing(df[2,:col1])
+        @test df[1,:col2] == 2
+        @test df[2,:col2] == 5
+        @test df[1,:col3] == 3
+        @test ismissing(df[2,:col3])
+
+        data = """
+        col1\tcol2\tcol3
+        foo\t\tbar
+        baz\tqux\t
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] isa Vector{String}
+        @test df[:col2] isa Vector{Union{String,Missing}}
+        @test df[:col3] isa Vector{Union{String,Missing}}
+        @test df[1,:col1] == "foo"
+        @test df[2,:col1] == "baz"
+        @test ismissing(df[1,:col2])
+        @test df[2,:col2] == "qux"
+        @test df[1,:col3] == "bar"
+        @test ismissing(df[2,:col3])
+    end
+
     @testset "large data" begin
         buf = IOBuffer()
         m = 10000
