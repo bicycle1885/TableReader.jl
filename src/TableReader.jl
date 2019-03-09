@@ -40,7 +40,7 @@ end
 # field kind
 const STRING  = 0b0000
 const INTEGER = 0b0001
-#const FLOAT   = UInt8(1) << 1
+const FLOAT   = UInt8(1) << 1
 #const BOOL    = UInt8(1) << 2
 const MISSING = 0b1111  # missing can be any data type
 
@@ -113,6 +113,8 @@ function readtsv(
                 end
                 if (parsable & INTEGER) != 0
                     columns[i] = hasmissing ? Union{Int,Missing}[] : Int[]
+                elseif (parsable & FLOAT) != 0
+                    columns[i] = hasmissing ? Union{Float64,Missing}[] : Float64[]
                 else
                     # fall back to string
                     columns[i] = hasmissing ? Union{String,Missing}[] : String[]
@@ -130,14 +132,18 @@ function readtsv(
                 col = columns[i]
                 if col isa Vector{Int} || col isa Vector{Union{Int,Missing}}
                     (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed"))
+                elseif col isa Vector{Float64} || col isa Vector{Union{Float64,Missing}}
+                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed"))
                 else
                     @assert col isa Vector{String} || col isa Vector{Union{String,Missing}}
                 end
                 # allow missing if any
                 if col isa Vector{Int} && hasmissing
-                    col = copyto!(Vector{Union{Int,Missing}}(undef, length(col)), col)
+                    columns[i] = copyto!(Vector{Union{Int,Missing}}(undef, length(col)), col)
+                elseif col isa Vector{Float64} && hasmissing
+                    columns[i] = copyto!(Vector{Union{Float64,Missing}}(undef, length(col)), col)
                 elseif col isa Vector{String} && hasmissing
-                    col = copyto!(Vector{Union{String,Missing}}(undef, length(col)), col)
+                    columns[i] = copyto!(Vector{Union{String,Missing}}(undef, length(col)), col)
                 end
             end
         end
@@ -242,6 +248,20 @@ end
         i += 1
     end
     return sign * n
+end
+
+function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+    for i in 1:nvals
+        start, stop = bounds(tokens[c,i])
+        col[end-nvals+i] = parse_float(mem, start, stop)
+    end
+    return col
+end
+
+@inline function parse_float(mem::Memory, start::Int, stop::Int)
+    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start-1, stop - start + 1)
+    @assert hasvalue
+    return val
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
@@ -389,6 +409,8 @@ function scanline!(
         @recordtoken INTEGER
         @endtoken
         @goto BEGIN
+    elseif c == UInt8('.')
+        @goto FLOAT
     elseif c == UInt8(' ')
         if trim
             @recordtoken INTEGER
@@ -413,6 +435,21 @@ function scanline!(
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
+        @goto END
+    end
+    @goto ERROR
+
+    @state FLOAT
+    if UInt8('0') ≤ c ≤ UInt8('9')
+        @goto FLOAT
+    elseif c == delim
+        @recordtoken FLOAT
+        @endtoken
+        @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8('\n')
+        @recordtoken FLOAT
         @goto END
     end
     @goto ERROR

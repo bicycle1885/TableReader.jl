@@ -21,6 +21,19 @@ using Test
         @test df[:col2] == [2, -5]
         @test df[:col3] == [3, +6]
 
+        # floats
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        1.0\t1.1\t12.34
+        -1.2\t0.0\t-9.
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [1.0, -1.2]
+        @test df[:col2] == [1.1, 0.0]
+        @test df[:col3] == [12.34, -9.0]
+
         # strings
         buffer = IOBuffer("""
         col1\tcol2\tcol3
