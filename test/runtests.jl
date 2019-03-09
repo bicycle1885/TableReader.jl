@@ -107,6 +107,22 @@ using Test
 
         data = """
         col1\tcol2\tcol3
+        1.0\t2.2\t-9.8
+        \t10\t
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] isa Vector{Union{Float64,Missing}}
+        @test df[:col2] isa Vector{Float64}
+        @test df[:col3] isa Vector{Union{Float64,Missing}}
+        @test df[1,:col1] == 1.0
+        @test ismissing(df[2,:col1])
+        @test df[1,:col2] == 2.2
+        @test df[2,:col2] == 10.0
+        @test df[1,:col3] == -9.8
+        @test ismissing(df[2,:col3])
+
+        data = """
+        col1\tcol2\tcol3
         foo\t\tbar
         baz\tqux\t
         """

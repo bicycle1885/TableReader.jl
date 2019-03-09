@@ -40,8 +40,7 @@ end
 # field kind
 const STRING  = 0b0000
 const INTEGER = 0b0001
-const FLOAT   = UInt8(1) << 1
-#const BOOL    = UInt8(1) << 2
+const FLOAT   = 0b0010
 const MISSING = 0b1111  # missing can be any data type
 
 struct Token
@@ -258,6 +257,19 @@ function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matr
     return col
 end
 
+function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+    for i in 1:nvals
+        t = tokens[c,i]
+        if ismissing(t)
+            col[end-nvals+i] = missing
+        else
+            start, stop = bounds(t)
+            col[end-nvals+i] = parse_float(mem, start, stop)
+        end
+    end
+    return col
+end
+
 @inline function parse_float(mem::Memory, start::Int, stop::Int)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start-1, stop - start + 1)
     @assert hasvalue
@@ -407,14 +419,14 @@ function scanline!(
     if UInt8('0') ≤ c ≤ UInt8('9')
         @goto INTEGER
     elseif c == delim
-        @recordtoken INTEGER
+        @recordtoken INTEGER|FLOAT
         @endtoken
         @goto BEGIN
     elseif c == UInt8('.')
         @goto POINT_FLOAT
     elseif c == UInt8(' ')
         if trim
-            @recordtoken INTEGER
+            @recordtoken INTEGER|FLOAT
             @goto INTEGER_SPACE
         else
             @goto STRING
@@ -424,7 +436,7 @@ function scanline!(
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
-        @recordtoken INTEGER
+        @recordtoken INTEGER|FLOAT
         @goto END
     end
     @goto ERROR
