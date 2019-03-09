@@ -126,7 +126,7 @@ function readtsv(
         for i in 1:ncols
             col = columns[i]
             resize!(col, length(col) + n_new_records)
-            fillcolumn!(col, n_new_records, mem, tokens, i, trim)
+            fillcolumn!(col, n_new_records, mem, tokens, i)
         end
         skip(stream, pos)
     end
@@ -184,7 +184,7 @@ function find_last_newline(mem::Memory)
     return i
 end
 
-function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, trim::Bool)
+function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
         start, stop = bounds(tokens[c,i])
         col[end-nvals+i] = parse_integer(mem, start, stop)
@@ -213,15 +213,9 @@ end
     return sign * n
 end
 
-function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, trim::Bool)
+function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
         start, stop = bounds(tokens[c,i])
-        if trim
-            # trim trailing space
-            while stop ≥ start && mem[stop] == UInt8(' ')
-                stop -= 1
-            end
-        end
         col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
     end
     return col
@@ -314,7 +308,14 @@ function scanline!(
     @state SIGN
     if UInt8('0') ≤ c ≤ UInt8('9')
         @goto INTEGER
-    elseif UInt8(' ') ≤ c ≤ UInt8('~')
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken STRING
+            @goto STRING_SPACE
+        else
+            @goto STRING
+        end
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == delim
         @recordtoken STRING
@@ -362,14 +363,35 @@ function scanline!(
     @goto ERROR
 
     @state STRING
-    if UInt8(' ') ≤ c ≤ UInt8('~')
+    if UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken STRING
+            @goto STRING_SPACE
+        else
+            @goto STRING
+        end
     elseif c == delim
         @recordtoken STRING
         @endtoken
         @goto BEGIN
     elseif c == UInt8('\n')
         @recordtoken STRING
+        @endtoken
+        @goto END
+    end
+    @goto ERROR
+
+    @state STRING_SPACE
+    if c == UInt8(' ')
+        @goto STRING_SPACE
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == delim
+        @endtoken
+        @goto BEGIN
+    elseif c == UInt8('\n')
         @endtoken
         @goto END
     end
