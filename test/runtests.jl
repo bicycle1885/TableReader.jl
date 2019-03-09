@@ -26,13 +26,15 @@ using Test
         col1\tcol2\tcol3
         1.0\t1.1\t12.34
         -1.2\t0.0\t-9.
+        .000\t.123\t100.000
+        1e3\t1.E+123\t-8.2e-00
         """)
         df = readtsv(buffer)
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
-        @test df[:col1] == [1.0, -1.2]
-        @test df[:col2] == [1.1, 0.0]
-        @test df[:col3] == [12.34, -9.0]
+        @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
+        @test df[:col2] == [1.1, 0.0, 0.123, 1e123]
+        @test df[:col3] == [12.34, -9.0, 100.000, -8.2]
 
         # strings
         buffer = IOBuffer("""

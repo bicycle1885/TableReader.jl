@@ -315,9 +315,7 @@ macro state(name)
 end
 
 macro begintoken()
-    esc(quote
-        token = pos
-    end)
+    esc(:(token = pos))
 end
 
 macro recordtoken(kind)
@@ -328,9 +326,7 @@ macro recordtoken(kind)
 end
 
 macro endtoken()
-    esc(quote
-        i += 1
-    end)
+    esc(:(i += 1))
 end
 
 # Scan a line in mem; mem must include one or more lines.
@@ -362,14 +358,17 @@ function scanline!(
             @begintoken
             @goto STRING
         end
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
+    elseif c == UInt8('.')
         @begintoken
-        @goto STRING
+        @goto DOT
     elseif c == delim
         @begintoken
         @recordtoken MISSING
         @endtoken
         @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @begintoken
+        @goto STRING
     elseif c == UInt8('\n')
         if i == ncols  # TODO
             @begintoken
@@ -383,6 +382,8 @@ function scanline!(
     @state SIGN
     if UInt8('0') ≤ c ≤ UInt8('9')
         @goto INTEGER
+    elseif c == UInt8('.')
+        @goto DOT
     elseif c == UInt8(' ')
         if trim
             @recordtoken STRING
@@ -390,12 +391,12 @@ function scanline!(
         else
             @goto STRING
         end
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
     elseif c == delim
         @recordtoken STRING
         @endtoken
         @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
     elseif c == UInt8('\n')
         @recordtoken STRING
         @goto END
@@ -410,7 +411,7 @@ function scanline!(
         @endtoken
         @goto BEGIN
     elseif c == UInt8('.')
-        @goto FLOAT
+        @goto POINT_FLOAT
     elseif c == UInt8(' ')
         if trim
             @recordtoken INTEGER
@@ -418,6 +419,8 @@ function scanline!(
         else
             @goto STRING
         end
+    elseif c == UInt8('e') || c == UInt8('E')
+        @goto EXPONENT
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
@@ -439,9 +442,55 @@ function scanline!(
     end
     @goto ERROR
 
-    @state FLOAT
+    @state DOT
     if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto FLOAT
+        @goto POINT_FLOAT
+    elseif c == delim
+        @recordtoken STRING
+        @endtoken
+        @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken STRING
+            @goto STRING_SPACE
+        else
+            @goto STRING
+        end
+    elseif c == UInt8('\n')
+        @recordtoken STRING
+        @goto END
+    end
+    @goto ERROR
+
+    @state POINT_FLOAT
+    if UInt8('0') ≤ c ≤ UInt8('9')
+        @goto POINT_FLOAT
+    elseif c == delim
+        @recordtoken FLOAT
+        @endtoken
+        @goto BEGIN
+    elseif c == UInt8('e') || c == UInt8('E')
+        @goto EXPONENT
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken FLOAT
+            @goto POINT_FLOAT_SPACE
+        else
+            @goto STRING
+        end
+    elseif c == UInt8('\n')
+        @recordtoken FLOAT
+        @goto END
+    end
+    @goto ERROR
+
+    @state POINT_FLOAT_SPACE
+    if c == UInt8(' ')
+        @goto POINT_FLOAT_SPACE
     elseif c == delim
         @recordtoken FLOAT
         @endtoken
@@ -449,7 +498,87 @@ function scanline!(
     elseif UInt8('!') ≤ c ≤ UInt8('~')
         @goto STRING
     elseif c == UInt8('\n')
+        @goto END
+    end
+    @goto ERROR
+
+    @state EXPONENT
+    if UInt8('0') ≤ c ≤ UInt8('9')
+        @goto EXPONENT_FLOAT
+    elseif c == delim
+        @recordtoken STRING
+        @endtoken
+        @goto BEGIN
+    elseif c == UInt8('-') || c == UInt8('+')
+        @goto EXPONENT_SIGN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken STRING
+            @goto STRING_SPACE
+        else
+            @goto STRING
+        end
+    elseif c == UInt8('\n')
+        @recordtoken STRING
+        @goto END
+    end
+    @goto ERROR
+
+    @state EXPONENT_SIGN
+    if UInt8('0') ≤ c ≤ UInt8('9')
+        @goto EXPONENT_FLOAT
+    elseif c == delim
+        @recordtoken STRING
+        @endtoken
+        @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken STRING
+            @goto STRING_SPACE
+        else
+            @goto STRING
+        end
+    elseif c == UInt8('\n')
+        @recordtoken STRING
+        @goto END
+    end
+    @goto ERROR
+
+    @state EXPONENT_FLOAT
+    if UInt8('0') ≤ c ≤ UInt8('9')
+        @goto EXPONENT_FLOAT
+    elseif c == delim
         @recordtoken FLOAT
+        @endtoken
+        @goto BEGIN
+    elseif c == UInt8(' ')
+        if trim
+            @recordtoken FLOAT
+            @goto EXPONENT_FLOAT_SPACE
+        else
+            @goto STRING
+        end
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8('\n')
+        @recordtoken FLOAT
+        @goto END
+    end
+    @goto ERROR
+
+    @state EXPONENT_FLOAT_SPACE
+    if c == UInt8(' ')
+        @goto EXPONENT_FLOAT_SPACE
+    elseif c == delim
+        @endtoken
+        @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
+    elseif c == UInt8('\n')
         @goto END
     end
     @goto ERROR
@@ -470,7 +599,6 @@ function scanline!(
         @goto BEGIN
     elseif c == UInt8('\n')
         @recordtoken STRING
-        @endtoken
         @goto END
     end
     @goto ERROR
@@ -478,13 +606,12 @@ function scanline!(
     @state STRING_SPACE
     if c == UInt8(' ')
         @goto STRING_SPACE
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
     elseif c == delim
         @endtoken
         @goto BEGIN
+    elseif UInt8('!') ≤ c ≤ UInt8('~')
+        @goto STRING
     elseif c == UInt8('\n')
-        @endtoken
         @goto END
     end
     @goto ERROR
