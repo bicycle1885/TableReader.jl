@@ -1,6 +1,6 @@
 module TableReader
 
-export readdlm, readtsv
+export readdlm, readtsv, readcsv
 
 using DataFrames:
     DataFrame
@@ -33,30 +33,6 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
     elseif quot == ' ' && trim
         throw(ArgumentError("space quote and space trimming are exclusive"))
     end
-end
-
-function readdlm(
-        filename::AbstractString;
-        delim::Char,
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-        bufsize::Integer = DEFAULT_BUFFER_SIZE,
-    )
-    check_parser_parameters(delim, quot, trim)
-    return open(filename) do file
-        return readdlm(file, delim = delim, quot = quot, trim = trim, bufsize = bufsize)
-    end
-end
-
-function readdlm(
-        file::IO;
-        delim::Char,
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-        bufsize::Integer = DEFAULT_BUFFER_SIZE,
-    )
-    check_parser_parameters(delim, quot, trim)
-    return readdlm(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE), delim = delim, quot = quot, trim = trim)
 end
 
 function readdlm(
@@ -146,30 +122,37 @@ function readdlm(
     return DataFrame(columns, colnames)
 end
 
-function readtsv(
-        filename::AbstractString;
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-        bufsize::Integer = DEFAULT_BUFFER_SIZE,
-    )
-    return readdlm(filename, delim = '\t', quot = quot, trim = trim, bufsize = bufsize)
-end
+for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
+    if delim === nothing
+        delimarg = :(delim::Char)
+    else
+        delimarg = Expr(:kw, :(delim::Char), delim)
+    end
+    @eval begin
+        function $(fname)(filename::AbstractString;
+                          $(delimarg),
+                          quot::Char = '"',
+                          trim::Bool = true,
+                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+            check_parser_parameters(delim, quot, trim)
+            return open(filename) do file
+                file = NoopStream(file, bufsize = bufsize)
+                return readdlm(file, delim = delim, quot = quot, trim = trim)
+            end
+        end
 
-function readtsv(
-        file::IO;
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-        bufsize::Integer = DEFAULT_BUFFER_SIZE,
-    )
-    return readdlm(file, delim = '\t', quot = quot, trim = trim, bufsize = bufsize)
-end
-
-function readtsv(
-        stream::TranscodingStream;
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-    )
-    return readdlm(stream, delim = '\t', quot = quot, trim = trim)
+        function $(fname)(file::IO;
+                          $(delimarg),
+                          quot::Char = '"',
+                          trim::Bool = true,
+                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+            check_parser_parameters(delim, quot, trim)
+            if !(file isa TranscodingStream)
+                file = NoopStream(file, bufsize = bufsize)
+            end
+            return readdlm(file, delim = delim, quot = quot, trim = trim)
+        end
+    end
 end
 
 # field kind

@@ -209,3 +209,53 @@ using Test
         @test df[:col2] == 1:m
     end
 end
+
+@testset "readcsv" begin
+    @testset "simple" begin
+        # empty
+        buffer = IOBuffer("")
+        df = readcsv(buffer)
+        @test isempty(names(df))
+
+        # integers
+        buffer = IOBuffer("""
+        col1,col2,col3
+        1,23,456
+        -10,-99,0
+        """)
+        df = readcsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [1, -10]
+        @test df[:col2] == [23, -99]
+        @test df[:col3] == [456, 0]
+
+        # floats
+        buffer = IOBuffer("""
+        col1,col2,col3
+        1.0,1.1,12.34
+        -1.2,0.0,-9.
+        .000,.123,100.000
+        1e3,1.E+123,-8.2e-00
+        """)
+        df = readcsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
+        @test df[:col2] == [1.1, 0.0, 0.123, 1e123]
+        @test df[:col3] == [12.34, -9.0, 100.000, -8.2]
+
+        # strings
+        buffer = IOBuffer("""
+        col1,col2,col3
+        a,b,c
+        foo,bar,baz
+        """)
+        df = readcsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == ["a", "foo"]
+        @test df[:col2] == ["b", "bar"]
+        @test df[:col3] == ["c", "baz"]
+    end
+end
