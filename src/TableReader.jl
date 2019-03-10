@@ -344,6 +344,9 @@ end
 
 function strip1(s::AbstractString, c::UInt8)
     char = Char(c)
+    if isempty(s)
+        return s
+    end
     return chop(s, head = startswith(s, char), tail = endswith(s, char))
 end
 
