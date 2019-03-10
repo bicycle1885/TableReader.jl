@@ -315,7 +315,9 @@ struct ReadError <: Exception
     msg::String
 end
 
-macro state(name)
+macro state(name, ex)
+    @assert name isa Symbol
+    @assert ex isa Expr && ex.head == :block
     esc(quote
         @label $(name)
         pos += 1
@@ -323,6 +325,8 @@ macro state(name)
             @goto END
         end
         @inbounds c = mem[pos]
+        $(ex)
+        @goto ERROR
     end)
 end
 
@@ -331,10 +335,7 @@ macro begintoken()
 end
 
 macro recordtoken(kind)
-    esc(quote
-        #@assert token > 0
-        tokens[i,row] = Token($(kind), token, pos - 1)
-    end)
+    esc(:(tokens[i,row] = Token($(kind), token, pos - 1)))
 end
 
 macro endtoken()
@@ -356,277 +357,277 @@ function scanline!(
     token = 0  # the starting position of a token
     i = 1  # the current token
 
-    @state BEGIN
-    if c == UInt8('-') || c == UInt8('+')
-        @begintoken
-        @goto SIGN
-    elseif UInt8('0') ≤ c ≤ UInt8('9')
-        @begintoken
-        @goto INTEGER
-    elseif c == UInt8(' ')
-        if trim
-            @goto BEGIN
-        else
+    @state BEGIN begin
+        if c == UInt8('-') || c == UInt8('+')
             @begintoken
-            @goto STRING
-        end
-    elseif c == UInt8('.')
-        @begintoken
-        @goto DOT
-    elseif c == delim
-        @begintoken
-        @recordtoken MISSING
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @begintoken
-        @goto STRING
-    elseif c == UInt8('\n')
-        if i == ncols  # TODO
+            @goto SIGN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @begintoken
+            @goto INTEGER
+        elseif c == UInt8(' ')
+            if trim
+                @goto BEGIN
+            else
+                @begintoken
+                @goto STRING
+            end
+        elseif c == UInt8('.')
+            @begintoken
+            @goto DOT
+        elseif c == delim
             @begintoken
             @recordtoken MISSING
             @endtoken
-        end
-        @goto END
-    end
-    @goto ERROR
-
-    @state SIGN
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto INTEGER
-    elseif c == UInt8('.')
-        @goto DOT
-    elseif c == UInt8(' ')
-        if trim
-            @recordtoken STRING
-            @goto STRING_SPACE
-        else
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @begintoken
             @goto STRING
+        elseif c == UInt8('\n')
+            if i == ncols  # TODO
+                @begintoken
+                @recordtoken MISSING
+                @endtoken
+            end
+            @goto END
         end
-    elseif c == delim
-        @recordtoken STRING
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @recordtoken STRING
-        @goto END
     end
-    @goto ERROR
 
-    @state INTEGER
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto INTEGER
-    elseif c == delim
-        @recordtoken INTEGER|FLOAT
-        @endtoken
-        @goto BEGIN
-    elseif c == UInt8('.')
-        @goto POINT_FLOAT
-    elseif c == UInt8(' ')
-        if trim
+    @state SIGN begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto INTEGER
+        elseif c == UInt8('.')
+            @goto DOT
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == delim
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @goto END
+        end
+    end
+
+    @state INTEGER begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto INTEGER
+        elseif c == delim
             @recordtoken INTEGER|FLOAT
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('.')
+            @goto POINT_FLOAT
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken INTEGER|FLOAT
+                @goto INTEGER_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == UInt8('e') || c == UInt8('E')
+            @goto EXPONENT
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken INTEGER|FLOAT
+            @goto END
+        end
+    end
+
+    @state INTEGER_SPACE begin
+        if c == UInt8(' ')
             @goto INTEGER_SPACE
-        else
+        elseif c == delim
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
+        elseif c == UInt8('\n')
+            @goto END
         end
-    elseif c == UInt8('e') || c == UInt8('E')
-        @goto EXPONENT
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @recordtoken INTEGER|FLOAT
-        @goto END
     end
-    @goto ERROR
 
-    @state INTEGER_SPACE
-    if c == UInt8(' ')
-        @goto INTEGER_SPACE
-    elseif c == delim
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @goto END
-    end
-    @goto ERROR
-
-    @state DOT
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto POINT_FLOAT
-    elseif c == delim
-        @recordtoken STRING
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8(' ')
-        if trim
+    @state DOT begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto POINT_FLOAT
+        elseif c == delim
             @recordtoken STRING
-            @goto STRING_SPACE
-        else
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @goto END
         end
-    elseif c == UInt8('\n')
-        @recordtoken STRING
-        @goto END
     end
-    @goto ERROR
 
-    @state POINT_FLOAT
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto POINT_FLOAT
-    elseif c == delim
-        @recordtoken FLOAT
-        @endtoken
-        @goto BEGIN
-    elseif c == UInt8('e') || c == UInt8('E')
-        @goto EXPONENT
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8(' ')
-        if trim
+    @state POINT_FLOAT begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto POINT_FLOAT
+        elseif c == delim
             @recordtoken FLOAT
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('e') || c == UInt8('E')
+            @goto EXPONENT
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken FLOAT
+                @goto POINT_FLOAT_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == UInt8('\n')
+            @recordtoken FLOAT
+            @goto END
+        end
+    end
+
+    @state POINT_FLOAT_SPACE begin
+        if c == UInt8(' ')
             @goto POINT_FLOAT_SPACE
-        else
-            @goto STRING
-        end
-    elseif c == UInt8('\n')
-        @recordtoken FLOAT
-        @goto END
-    end
-    @goto ERROR
-
-    @state POINT_FLOAT_SPACE
-    if c == UInt8(' ')
-        @goto POINT_FLOAT_SPACE
-    elseif c == delim
-        @recordtoken FLOAT
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @goto END
-    end
-    @goto ERROR
-
-    @state EXPONENT
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto EXPONENT_FLOAT
-    elseif c == delim
-        @recordtoken STRING
-        @endtoken
-        @goto BEGIN
-    elseif c == UInt8('-') || c == UInt8('+')
-        @goto EXPONENT_SIGN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8(' ')
-        if trim
-            @recordtoken STRING
-            @goto STRING_SPACE
-        else
-            @goto STRING
-        end
-    elseif c == UInt8('\n')
-        @recordtoken STRING
-        @goto END
-    end
-    @goto ERROR
-
-    @state EXPONENT_SIGN
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto EXPONENT_FLOAT
-    elseif c == delim
-        @recordtoken STRING
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8(' ')
-        if trim
-            @recordtoken STRING
-            @goto STRING_SPACE
-        else
-            @goto STRING
-        end
-    elseif c == UInt8('\n')
-        @recordtoken STRING
-        @goto END
-    end
-    @goto ERROR
-
-    @state EXPONENT_FLOAT
-    if UInt8('0') ≤ c ≤ UInt8('9')
-        @goto EXPONENT_FLOAT
-    elseif c == delim
-        @recordtoken FLOAT
-        @endtoken
-        @goto BEGIN
-    elseif c == UInt8(' ')
-        if trim
+        elseif c == delim
             @recordtoken FLOAT
-            @goto EXPONENT_FLOAT_SPACE
-        else
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
+        elseif c == UInt8('\n')
+            @goto END
         end
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @recordtoken FLOAT
-        @goto END
     end
-    @goto ERROR
 
-    @state EXPONENT_FLOAT_SPACE
-    if c == UInt8(' ')
-        @goto EXPONENT_FLOAT_SPACE
-    elseif c == delim
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @goto END
-    end
-    @goto ERROR
-
-    @state STRING
-    if UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8(' ')
-        if trim
+    @state EXPONENT begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
+        elseif c == delim
             @recordtoken STRING
-            @goto STRING_SPACE
-        else
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('-') || c == UInt8('+')
+            @goto EXPONENT_SIGN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @goto END
         end
-    elseif c == delim
-        @recordtoken STRING
-        @endtoken
-        @goto BEGIN
-    elseif c == UInt8('\n')
-        @recordtoken STRING
-        @goto END
     end
-    @goto ERROR
 
-    @state STRING_SPACE
-    if c == UInt8(' ')
-        @goto STRING_SPACE
-    elseif c == delim
-        @endtoken
-        @goto BEGIN
-    elseif UInt8('!') ≤ c ≤ UInt8('~')
-        @goto STRING
-    elseif c == UInt8('\n')
-        @goto END
+    @state EXPONENT_SIGN begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
+        elseif c == delim
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @goto END
+        end
     end
-    @goto ERROR
+
+    @state EXPONENT_FLOAT begin
+        if UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
+        elseif c == delim
+            @recordtoken FLOAT
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken FLOAT
+                @goto EXPONENT_FLOAT_SPACE
+            else
+                @goto STRING
+            end
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken FLOAT
+            @goto END
+        end
+    end
+
+    @state EXPONENT_FLOAT_SPACE begin
+        if c == UInt8(' ')
+            @goto EXPONENT_FLOAT_SPACE
+        elseif c == delim
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @goto END
+        end
+    end
+
+    @state STRING begin
+        if UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif c == delim
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @goto END
+        end
+    end
+
+    @state STRING_SPACE begin
+        if c == UInt8(' ')
+            @goto STRING_SPACE
+        elseif c == delim
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @goto END
+        end
+    end
 
     @label ERROR
     throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
