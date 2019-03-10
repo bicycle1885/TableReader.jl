@@ -138,6 +138,18 @@ using Test
         @test ismissing(df[2,:col3])
     end
 
+    @testset "UTF-8 strings" begin
+        data = """
+        col1\tcol2\tcol3
+        甲\t乙\t丙
+        👌\t😀😀😀\t🐸🐓
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == ["甲", "👌"]
+        @test df[:col2] == ["乙", "😀😀😀"]
+        @test df[:col3] == ["丙", "🐸🐓"]
+    end
+
     @testset "large data" begin
         buf = IOBuffer()
         m = 10000

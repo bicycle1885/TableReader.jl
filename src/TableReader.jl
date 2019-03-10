@@ -326,6 +326,23 @@ macro state(name, ex)
         end
         @inbounds c = mem[pos]
         $(ex)
+        # multibyte UTF8 character
+        if 0b110_00000 ≤ c ≤ 0b110_11111
+            if pos + 1 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111)
+                pos += 1
+                @goto STRING
+            end
+        elseif 0b1110_0000 ≤ c ≤ 0b1110_1111
+            if pos + 2 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+2] ≤ 0b10_111111)
+                pos += 2
+                @goto STRING
+            end
+        elseif 0b11110_000 ≤ c ≤ 0b11110_111
+            if pos + 3 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+2] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+3] ≤ 0b10_111111)
+                pos += 3
+                @goto STRING
+            end
+        end
         @goto ERROR
     end)
 end
@@ -358,33 +375,27 @@ function scanline!(
     i = 1  # the current token
 
     @state BEGIN begin
+        @begintoken
         if c == UInt8('-') || c == UInt8('+')
-            @begintoken
             @goto SIGN
         elseif UInt8('0') ≤ c ≤ UInt8('9')
-            @begintoken
             @goto INTEGER
         elseif c == UInt8(' ')
             if trim
                 @goto BEGIN
             else
-                @begintoken
                 @goto STRING
             end
         elseif c == UInt8('.')
-            @begintoken
             @goto DOT
         elseif c == delim
-            @begintoken
             @recordtoken MISSING
             @endtoken
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
-            @begintoken
             @goto STRING
         elseif c == UInt8('\n')
             if i == ncols  # TODO
-                @begintoken
                 @recordtoken MISSING
                 @endtoken
             end
