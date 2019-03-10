@@ -1,6 +1,6 @@
 module TableReader
 
-export readtsv
+export readdlm, readtsv
 
 using DataFrames:
     DataFrame
@@ -16,69 +16,50 @@ const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
 const DEFAULT_TRIM = true
 const MAX_BUFFERED_ROWS = 100
 
-function readtsv(
+# Printable characters
+const CHARS_PRINT = ' ':'~'
+
+# Whitelist of delimiters
+const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
+
+function check_parser_parameters(delim::Char, trim::Bool)
+    if delim ∉ ALLOWED_DELIMITERS
+        throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
+    elseif delim == ' ' && trim
+        throw(ArgumentError("space delimiter and space trimming are exclusive"))
+    end
+end
+
+function readdlm(
         filename::AbstractString;
+        delim::Char,
+        trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
-        trim::Bool = DEFAULT_TRIM
     )
+    check_parser_parameters(delim, trim)
     return open(filename) do file
-        readtsv(file, bufsize = bufsize, trim = trim)
+        return readdlm(file, delim = delim, trim = trim, bufsize = bufsize)
     end
 end
 
-function readtsv(
+function readdlm(
         file::IO;
+        delim::Char,
+        trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
-        trim::Bool = DEFAULT_TRIM
     )
-    return readtsv(
-        NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE),
-        trim = trim,
-    )
+    check_parser_parameters(delim, trim)
+    return readdlm(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE), delim = delim, trim = trim)
 end
 
-# field kind
-const STRING  = 0b0000
-const INTEGER = 0b0001
-const FLOAT   = 0b0010
-const MISSING = 0b1111  # missing can be any data type
-
-struct Token
-    # From most significant
-    #    4bit: kind (+ missing)
-    #   30bit: start positin
-    #   30bit: end position
-    value::UInt64
-
-    function Token(kind::UInt8, start::Int, stop::Int)
-        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(stop))
-    end
-end
-
-function kind(token::Token)
-    return (token.value >> 60) % UInt8
-end
-
-function ismissing(token::Token)
-    return (token.value & (UInt64(1) << 63)) != 0
-end
-
-function range(token::Token)
-    x = token.value & (~UInt64(0) >> 4)
-    return (x >> 30) % Int : (x & (~UInt64(0) >> 34)) % Int
-end
-
-function bounds(token::Token)
-    x = token.value & (~UInt64(0) >> 4)
-    return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
-end
-
-function readtsv(
+function readdlm(
         stream::TranscodingStream;
+        delim::Char,
         trim::Bool = DEFAULT_TRIM,
     )
-    delim = UInt8('\t')
-    colnames = readheader(stream, delim, trim)
+    check_parser_parameters(delim, trim)
+    delim_byte = UInt8(delim)
+    colnames = readheader(stream, delim_byte, trim)
     ncols = length(colnames)
     if ncols == 0
         return DataFrame()
@@ -95,7 +76,7 @@ function readtsv(
         pos = 0
         block_begin = line
         while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
-            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim, trim)
+            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim_byte, trim)
             line += 1
         end
         n_new_records = line - block_begin
@@ -154,6 +135,65 @@ function readtsv(
         skip(stream, pos)
     end
     return DataFrame(columns, colnames)
+end
+
+function readtsv(
+        filename::AbstractString;
+        bufsize::Integer = DEFAULT_BUFFER_SIZE,
+        trim::Bool = DEFAULT_TRIM
+    )
+    return readdlm(file, delim = '\t', trim = trim, bufsize = bufsize)
+end
+
+function readtsv(
+        file::IO;
+        bufsize::Integer = DEFAULT_BUFFER_SIZE,
+        trim::Bool = DEFAULT_TRIM
+    )
+    return readdlm(file, delim = '\t', trim = trim, bufsize = bufsize)
+end
+
+function readtsv(
+        stream::TranscodingStream;
+        trim::Bool = DEFAULT_TRIM,
+    )
+    return readdlm(stream, delim = '\t', trim = trim)
+end
+
+# field kind
+const STRING  = 0b0000
+const INTEGER = 0b0001
+const FLOAT   = 0b0010
+const MISSING = 0b1111  # missing can be any data type
+
+struct Token
+    # From most significant
+    #    4bit: kind (+ missing)
+    #   30bit: start positin
+    #   30bit: end position
+    value::UInt64
+
+    function Token(kind::UInt8, start::Int, stop::Int)
+        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(stop))
+    end
+end
+
+function kind(token::Token)
+    return (token.value >> 60) % UInt8
+end
+
+function ismissing(token::Token)
+    return (token.value & (UInt64(1) << 63)) != 0
+end
+
+function range(token::Token)
+    x = token.value & (~UInt64(0) >> 4)
+    return (x >> 30) % Int : (x & (~UInt64(0) >> 34)) % Int
+end
+
+function bounds(token::Token)
+    x = token.value & (~UInt64(0) >> 4)
+    return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
 end
 
 function fillbuffer(stream::NoopStream)
@@ -368,7 +408,11 @@ function scanline!(
         # parser parameters
         delim::UInt8, trim::Bool
     )
-    @assert delim ∈ (UInt8('\t'), UInt8(';'), UInt8('|'),)
+
+    # Check parameters.
+    @assert !trim || delim != UInt8(' ')
+
+    # Initialize variables.
     pos_end = lastnl
     ncols = size(tokens, 1)
     token = 0  # the starting position of a token
@@ -376,7 +420,11 @@ function scanline!(
 
     @state BEGIN begin
         @begintoken
-        if c == UInt8('-') || c == UInt8('+')
+        if c == delim
+            @recordtoken MISSING
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('-') || c == UInt8('+')
             @goto SIGN
         elseif UInt8('0') ≤ c ≤ UInt8('9')
             @goto INTEGER
@@ -388,10 +436,6 @@ function scanline!(
             end
         elseif c == UInt8('.')
             @goto DOT
-        elseif c == delim
-            @recordtoken MISSING
-            @endtoken
-            @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -404,7 +448,11 @@ function scanline!(
     end
 
     @state SIGN begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
+        if c == delim
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
             @goto INTEGER
         elseif c == UInt8('.')
             @goto DOT
@@ -415,10 +463,6 @@ function scanline!(
             else
                 @goto STRING
             end
-        elseif c == delim
-            @recordtoken STRING
-            @endtoken
-            @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -428,12 +472,12 @@ function scanline!(
     end
 
     @state INTEGER begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto INTEGER
-        elseif c == delim
+        if c == delim
             @recordtoken INTEGER|FLOAT
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto INTEGER
         elseif c == UInt8('.')
             @goto POINT_FLOAT
         elseif c == UInt8(' ')
@@ -467,12 +511,12 @@ function scanline!(
     end
 
     @state DOT begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto POINT_FLOAT
-        elseif c == delim
+        if c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto POINT_FLOAT
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
@@ -489,12 +533,12 @@ function scanline!(
     end
 
     @state POINT_FLOAT begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto POINT_FLOAT
-        elseif c == delim
+        if c == delim
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto POINT_FLOAT
         elseif c == UInt8('e') || c == UInt8('E')
             @goto EXPONENT
         elseif UInt8('!') ≤ c ≤ UInt8('~')
@@ -527,12 +571,12 @@ function scanline!(
     end
 
     @state EXPONENT begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto EXPONENT_FLOAT
-        elseif c == delim
+        if c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
         elseif c == UInt8('-') || c == UInt8('+')
             @goto EXPONENT_SIGN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
@@ -551,12 +595,12 @@ function scanline!(
     end
 
     @state EXPONENT_SIGN begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto EXPONENT_FLOAT
-        elseif c == delim
+        if c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
@@ -573,12 +617,12 @@ function scanline!(
     end
 
     @state EXPONENT_FLOAT begin
-        if UInt8('0') ≤ c ≤ UInt8('9')
-            @goto EXPONENT_FLOAT
-        elseif c == delim
+        if c == delim
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
+        elseif UInt8('0') ≤ c ≤ UInt8('9')
+            @goto EXPONENT_FLOAT
         elseif c == UInt8(' ')
             if trim
                 @recordtoken FLOAT
@@ -608,7 +652,11 @@ function scanline!(
     end
 
     @state STRING begin
-        if UInt8('!') ≤ c ≤ UInt8('~')
+        if c == delim
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
             if trim
@@ -617,10 +665,6 @@ function scanline!(
             else
                 @goto STRING
             end
-        elseif c == delim
-            @recordtoken STRING
-            @endtoken
-            @goto BEGIN
         elseif c == UInt8('\n')
             @recordtoken STRING
             @goto END
