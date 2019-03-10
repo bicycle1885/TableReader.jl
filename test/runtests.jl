@@ -11,15 +11,15 @@ using Test
         # integers
         buffer = IOBuffer("""
         col1\tcol2\tcol3
-        1\t2\t3
-        -4\t-5\t+6
+        1\t23\t456
+        -10\t-99\t0
         """)
         df = readtsv(buffer)
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
-        @test df[:col1] == [1, -4]
-        @test df[:col2] == [2, -5]
-        @test df[:col3] == [3, +6]
+        @test df[:col1] == [1, -10]
+        @test df[:col2] == [23, -99]
+        @test df[:col3] == [456, 0]
 
         # floats
         buffer = IOBuffer("""
@@ -41,6 +41,46 @@ using Test
         col1\tcol2\tcol3
         a\tb\tc
         foo\tbar\tbaz
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == ["a", "foo"]
+        @test df[:col2] == ["b", "bar"]
+        @test df[:col3] == ["c", "baz"]
+    end
+
+    @testset "quotation" begin
+        data = """
+        "col1"\t"col2"\t"col3"
+        "1"\t"23"\t"456"
+        "-10"\t"-99"\t"0"
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, -10]
+        @test df[:col2] == [23, -99]
+        @test df[:col3] == [456, 0]
+
+        # floats
+        buffer = IOBuffer("""
+        "col1"\t"col2"\t"col3"
+        "1.0"\t"1.1"\t"12.34"
+        "-1.2"\t"0.0"\t"-9."
+        ".000"\t".123"\t"100.000"
+        "1e3"\t"1.E+123"\t"-8.2e-00"
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
+        @test df[:col2] == [1.1, 0.0, 0.123, 1e123]
+        @test df[:col3] == [12.34, -9.0, 100.000, -8.2]
+
+        # strings
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        "a"\t"b"\t"c"
+        "foo"\t"bar"\t"baz"
         """)
         df = readtsv(buffer)
         @test eof(buffer)

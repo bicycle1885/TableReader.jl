@@ -13,6 +13,7 @@ using TranscodingStreams:
     buffermem
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
+const DEFAULT_QUOTE = '"'
 const DEFAULT_TRIM = true
 const MAX_BUFFERED_ROWS = 100
 
@@ -22,44 +23,52 @@ const CHARS_PRINT = ' ':'~'
 # Whitelist of delimiters
 const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
 
-function check_parser_parameters(delim::Char, trim::Bool)
+function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
     if delim ∉ ALLOWED_DELIMITERS
         throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
+    elseif delim == quot
+        throw(ArgumentError("delimiter and quote cannot be the same character"))
     elseif delim == ' ' && trim
         throw(ArgumentError("space delimiter and space trimming are exclusive"))
+    elseif quot == ' ' && trim
+        throw(ArgumentError("space quote and space trimming are exclusive"))
     end
 end
 
 function readdlm(
         filename::AbstractString;
         delim::Char,
+        quot::Char = DEFAULT_QUOTE,
         trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
     )
-    check_parser_parameters(delim, trim)
+    check_parser_parameters(delim, quot, trim)
     return open(filename) do file
-        return readdlm(file, delim = delim, trim = trim, bufsize = bufsize)
+        return readdlm(file, delim = delim, quot = quot, trim = trim, bufsize = bufsize)
     end
 end
 
 function readdlm(
         file::IO;
         delim::Char,
+        quot::Char = DEFAULT_QUOTE,
         trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
     )
-    check_parser_parameters(delim, trim)
-    return readdlm(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE), delim = delim, trim = trim)
+    check_parser_parameters(delim, quot, trim)
+    return readdlm(NoopStream(file, bufsize = DEFAULT_BUFFER_SIZE), delim = delim, quot = quot, trim = trim)
 end
 
 function readdlm(
         stream::TranscodingStream;
         delim::Char,
+        quot::Char = DEFAULT_QUOTE,
         trim::Bool = DEFAULT_TRIM,
     )
-    check_parser_parameters(delim, trim)
+    check_parser_parameters(delim, quot, trim)
     delim_byte = UInt8(delim)
-    colnames = readheader(stream, delim_byte, trim)
+    quot_byte = UInt8(quot)
+    colnames = readheader(stream, delim_byte, quot_byte, trim)
     ncols = length(colnames)
     if ncols == 0
         return DataFrame()
@@ -76,7 +85,7 @@ function readdlm(
         pos = 0
         block_begin = line
         while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
-            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim_byte, trim)
+            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim_byte, quot_byte, trim)
             line += 1
         end
         n_new_records = line - block_begin
@@ -139,25 +148,28 @@ end
 
 function readtsv(
         filename::AbstractString;
+        quot::Char = DEFAULT_QUOTE,
+        trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
-        trim::Bool = DEFAULT_TRIM
     )
-    return readdlm(file, delim = '\t', trim = trim, bufsize = bufsize)
+    return readdlm(filename, delim = '\t', quot = quot, trim = trim, bufsize = bufsize)
 end
 
 function readtsv(
         file::IO;
+        quot::Char = DEFAULT_QUOTE,
+        trim::Bool = DEFAULT_TRIM,
         bufsize::Integer = DEFAULT_BUFFER_SIZE,
-        trim::Bool = DEFAULT_TRIM
     )
-    return readdlm(file, delim = '\t', trim = trim, bufsize = bufsize)
+    return readdlm(file, delim = '\t', quot = quot, trim = trim, bufsize = bufsize)
 end
 
 function readtsv(
         stream::TranscodingStream;
+        quot::Char = DEFAULT_QUOTE,
         trim::Bool = DEFAULT_TRIM,
     )
-    return readdlm(stream, delim = '\t', trim = trim)
+    return readdlm(stream, delim = '\t', quot = quot, trim = trim)
 end
 
 # field kind
@@ -338,12 +350,18 @@ function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory
 end
 
 # Read header and return column names.
-function readheader(stream::TranscodingStream, delim::UInt8, trim::Bool)
+function readheader(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
+    # TODO: be more careful
     header = readline(stream)
     if all(isequal(' '), header)
         return Symbol[]
     end
-    return [Symbol(trim ? strip(x) : x) for x in split(header, Char(delim))]
+    return [Symbol(trim ? strip(strip1(x, quot)) : strip1(x, quot)) for x in split(header, Char(delim))]
+end
+
+function strip1(s::AbstractString, c::UInt8)
+    char = Char(c)
+    return chop(s, head = startswith(s, char), tail = endswith(s, char))
 end
 
 mutable struct ParserState
@@ -406,21 +424,33 @@ function scanline!(
         # input info
         mem::Memory, pos::Int, lastnl::Int, line::Int,
         # parser parameters
-        delim::UInt8, trim::Bool
+        delim::UInt8, quot::UInt8, trim::Bool
     )
 
     # Check parameters.
+    @assert delim != quot
     @assert !trim || delim != UInt8(' ')
+    @assert !trim || quot != UInt8(' ')
 
     # Initialize variables.
     pos_end = lastnl
     ncols = size(tokens, 1)
+    quoted = false
     token = 0  # the starting position of a token
     i = 1  # the current token
 
     @state BEGIN begin
         @begintoken
-        if c == delim
+        if c == quot
+            if quoted
+                @recordtoken MISSING
+                @endtoken
+                quoted = false
+            else
+                quoted = true
+            end
+            @goto BEGIN
+        elseif c == delim
             @recordtoken MISSING
             @endtoken
             @goto BEGIN
@@ -448,7 +478,12 @@ function scanline!(
     end
 
     @state SIGN begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -472,7 +507,12 @@ function scanline!(
     end
 
     @state INTEGER begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken INTEGER|FLOAT
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken INTEGER|FLOAT
             @endtoken
             @goto BEGIN
@@ -498,7 +538,12 @@ function scanline!(
     end
 
     @state INTEGER_SPACE begin
-        if c == UInt8(' ')
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == UInt8(' ')
             @goto INTEGER_SPACE
         elseif c == delim
             @endtoken
@@ -511,7 +556,12 @@ function scanline!(
     end
 
     @state DOT begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -533,7 +583,12 @@ function scanline!(
     end
 
     @state POINT_FLOAT begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken FLOAT
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
@@ -557,7 +612,12 @@ function scanline!(
     end
 
     @state POINT_FLOAT_SPACE begin
-        if c == UInt8(' ')
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == UInt8(' ')
             @goto POINT_FLOAT_SPACE
         elseif c == delim
             @recordtoken FLOAT
@@ -571,7 +631,12 @@ function scanline!(
     end
 
     @state EXPONENT begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -595,7 +660,12 @@ function scanline!(
     end
 
     @state EXPONENT_SIGN begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -617,7 +687,12 @@ function scanline!(
     end
 
     @state EXPONENT_FLOAT begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken FLOAT
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
@@ -639,7 +714,12 @@ function scanline!(
     end
 
     @state EXPONENT_FLOAT_SPACE begin
-        if c == UInt8(' ')
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == UInt8(' ')
             @goto EXPONENT_FLOAT_SPACE
         elseif c == delim
             @endtoken
@@ -652,7 +732,12 @@ function scanline!(
     end
 
     @state STRING begin
-        if c == delim
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == delim
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -672,13 +757,32 @@ function scanline!(
     end
 
     @state STRING_SPACE begin
-        if c == UInt8(' ')
+        if quoted && c == quot
+            @recordtoken STRING
+            @endtoken
+            quoted = false
+            @goto QUOTE_END
+        elseif c == UInt8(' ')
             @goto STRING_SPACE
         elseif c == delim
             @endtoken
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
+        elseif c == UInt8('\n')
+            @goto END
+        end
+    end
+
+    @state QUOTE_END begin
+        if c == delim
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            if trim
+                @goto QUOTE_END
+            else
+                @goto ERROR
+            end
         elseif c == UInt8('\n')
             @goto END
         end
