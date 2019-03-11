@@ -16,6 +16,8 @@ using CodecZlib:
     GzipDecompressorStream
 using CodecZstd:
     ZstdDecompressorStream
+using CodecXz:
+    XzDecompressorStream
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
 const DEFAULT_QUOTE = '"'
@@ -58,6 +60,8 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                     file = GzipDecompressorStream(file, bufsize = bufsize)
                 elseif endswith(filename, ".zst")
                     file = ZstdDecompressorStream(file, bufsize = bufsize)
+                elseif endswith(filename, ".xz")
+                    file = XzDecompressorStream(file, bufsize = bufsize)
                 else
                     file = NoopStream(file, bufsize = bufsize)
                 end
