@@ -19,7 +19,7 @@ using CodecZstd:
 using CodecXz:
     XzDecompressorStream
 
-const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
+const DEFAULT_BUFFER_SIZE = 1 * 2^20  # 1 MiB
 const MAX_BUFFERED_ROWS = 1000
 
 # Printable characters
