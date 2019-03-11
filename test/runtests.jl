@@ -178,6 +178,22 @@ using Test
         @test ismissing(df[2,:col3])
     end
 
+    @testset "malformed file" begin
+        # less columns than expected
+        data = """
+        col1\tcol2\tcol3
+        foo\tbar
+        """
+        @test_throws TableReader.ReadError readtsv(IOBuffer(data))
+
+        # more columns than expected
+        data = """
+        col1\tcol2\tcol3
+        foo\tbar\tbaz\tqux
+        """
+        @test_throws TableReader.ReadError readtsv(IOBuffer(data))
+    end
+
     @testset "UTF-8 strings" begin
         data = """
         col1\tcol2\tcol3

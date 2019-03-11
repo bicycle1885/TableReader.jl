@@ -388,7 +388,12 @@ macro begintoken()
 end
 
 macro recordtoken(kind)
-    esc(:(tokens[i,row] = Token($(kind), token, pos - 1)))
+    quote
+        if i > ncols
+            @goto ERROR
+        end
+        tokens[i,row] = Token($(kind), token, pos - 1)
+    end |> esc
 end
 
 macro endtoken()
@@ -449,8 +454,8 @@ function scanline!(
         elseif c == UInt8('\n')
             if i == ncols  # TODO
                 @recordtoken MISSING
-                @endtoken
             end
+            @endtoken
             @goto END
         end
     end
@@ -480,6 +485,7 @@ function scanline!(
             @goto STRING
         elseif c == UInt8('\n')
             @recordtoken STRING
+            @endtoken
             @goto END
         end
     end
@@ -511,6 +517,7 @@ function scanline!(
             @goto STRING
         elseif c == UInt8('\n')
             @recordtoken INTEGER|FLOAT
+            @endtoken
             @goto END
         end
     end
@@ -529,6 +536,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
+            @endtoken
             @goto END
         end
     end
@@ -556,6 +564,7 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @recordtoken STRING
+            @endtoken
             @goto END
         end
     end
@@ -585,6 +594,7 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @recordtoken FLOAT
+            @endtoken
             @goto END
         end
     end
@@ -604,6 +614,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
+            @endtoken
             @goto END
         end
     end
@@ -633,6 +644,7 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @recordtoken STRING
+            @endtoken
             @goto END
         end
     end
@@ -660,6 +672,7 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @recordtoken STRING
+            @endtoken
             @goto END
         end
     end
@@ -687,6 +700,7 @@ function scanline!(
             @goto STRING
         elseif c == UInt8('\n')
             @recordtoken FLOAT
+            @endtoken
             @goto END
         end
     end
@@ -705,6 +719,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
+            @endtoken
             @goto END
         end
     end
@@ -730,6 +745,7 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @recordtoken STRING
+            @endtoken
             @goto END
         end
     end
@@ -748,6 +764,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
+            @endtoken
             @goto END
         end
     end
@@ -762,6 +779,7 @@ function scanline!(
                 @goto ERROR
             end
         elseif c == UInt8('\n')
+            @endtoken
             @goto END
         end
     end
@@ -770,6 +788,9 @@ function scanline!(
     throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
 
     @label END
+    if i ≤ ncols
+        throw(ReadError("invalid number of columns at line $(line)"))
+    end
     return pos
 end
 
