@@ -135,9 +135,9 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
                 end
                 col = columns[i]
                 if col isa Vector{Int} || col isa Vector{Union{Int,Missing}}
-                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed"))
+                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i)"))
                 elseif col isa Vector{Float64} || col isa Vector{Union{Float64,Missing}}
-                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed"))
+                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i)"))
                 else
                     @assert col isa Vector{String} || col isa Vector{Union{String,Missing}}
                 end
