@@ -320,11 +320,6 @@ function strip1(s::AbstractString, c::UInt8)
     return chop(s, head = startswith(s, char), tail = endswith(s, char))
 end
 
-mutable struct ParserState
-    stream::TranscodingStream
-    line::Int
-end
-
 struct ReadError <: Exception
     msg::String
 end
