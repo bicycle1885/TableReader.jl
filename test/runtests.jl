@@ -235,6 +235,11 @@ using Test
         @test df[:col1] == [1, 4]
         @test df[:col2] == [2, 5]
         @test df[:col3] == [3, 6]
+
+        df = readtsv(joinpath(@__DIR__, "test.tsv.zst"))
+        @test df[:col1] == [1, 4]
+        @test df[:col2] == [2, 5]
+        @test df[:col3] == [3, 6]
     end
 end
 

@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+CodecZstd = "6b39b394-51ab-5f42-8807-6242bab2b4c2"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 
