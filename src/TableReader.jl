@@ -12,6 +12,8 @@ using TranscodingStreams:
     Buffer,
     fillbuffer,
     buffermem
+using CodecZlib:
+    GzipDecompressorStream
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
 const DEFAULT_QUOTE = '"'
@@ -50,7 +52,11 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           bufsize::Integer = DEFAULT_BUFFER_SIZE)
             check_parser_parameters(delim, quot, trim)
             return open(filename) do file
-                file = NoopStream(file, bufsize = bufsize)
+                if endswith(filename, ".gz")
+                    file = GzipDecompressorStream(file, bufsize = bufsize)
+                else
+                    file = NoopStream(file, bufsize = bufsize)
+                end
                 return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
             end
         end
@@ -80,7 +86,6 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     n_block_rows = size(tokens, 2)
     columns = Vector[]
     line = 2
-    #while (fillbuffer(stream; eager = true); mem = buffermem(stream.state.buffer1); lastnl = find_last_newline(mem)) > 0
     while !eof(stream)
         fillbuffer(stream, eager = true)
         mem = buffermem(stream.state.buffer1)

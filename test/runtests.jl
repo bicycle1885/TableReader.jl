@@ -224,6 +224,18 @@ using Test
         @test df[:col1] == 1:m
         @test df[:col2] == 1:m
     end
+
+    @testset "from file" begin
+        df = readtsv(joinpath(@__DIR__, "test.tsv"))
+        @test df[:col1] == [1, 4]
+        @test df[:col2] == [2, 5]
+        @test df[:col3] == [3, 6]
+
+        df = readtsv(joinpath(@__DIR__, "test.tsv.gz"))
+        @test df[:col1] == [1, 4]
+        @test df[:col2] == [2, 5]
+        @test df[:col3] == [3, 6]
+    end
 end
 
 @testset "readcsv" begin
