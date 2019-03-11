@@ -313,4 +313,15 @@ end
         @test df[:col2] == ["b", "bar"]
         @test df[:col3] == ["c", "baz"]
     end
+
+    @testset "quotation" begin
+        data = """
+        "col1","col2"
+        "hi, there",","
+        "1,2,3,4", ",,,"
+        """
+        df = readcsv(IOBuffer(data))
+        @test df[:col1] == ["hi, there", "1,2,3,4"]
+        @test df[:col2] == [",", ",,,"]
+    end
 end

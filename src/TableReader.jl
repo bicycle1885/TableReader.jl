@@ -412,6 +412,9 @@ function scanline!(
             end
             @goto BEGIN
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken MISSING
             @endtoken
             @goto BEGIN
@@ -420,7 +423,7 @@ function scanline!(
         elseif UInt8('0') ≤ c ≤ UInt8('9')
             @goto INTEGER
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @goto BEGIN
             else
                 @goto STRING
@@ -445,6 +448,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -453,7 +459,7 @@ function scanline!(
         elseif c == UInt8('.')
             @goto DOT
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken STRING
                 @goto STRING_SPACE
             else
@@ -475,6 +481,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken INTEGER|FLOAT
             @endtoken
             @goto BEGIN
@@ -483,7 +492,7 @@ function scanline!(
         elseif c == UInt8('.')
             @goto POINT_FLOAT
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken INTEGER|FLOAT
                 @goto INTEGER_SPACE
             else
@@ -501,7 +510,7 @@ function scanline!(
     end
 
     @state INTEGER_SPACE begin
-        if quoted && c == quot
+        if quoted && c == quot  # TODO: this will not happen?
             @recordtoken STRING
             @endtoken
             quoted = false
@@ -526,6 +535,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -534,7 +546,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken STRING
                 @goto STRING_SPACE
             else
@@ -554,6 +566,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
@@ -564,7 +579,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken FLOAT
                 @goto POINT_FLOAT_SPACE
             else
@@ -604,6 +619,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -614,7 +632,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken STRING
                 @goto STRING_SPACE
             else
@@ -634,6 +652,9 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto BEGIN
@@ -642,7 +663,7 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken STRING
                 @goto STRING_SPACE
             else
@@ -662,13 +683,16 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken FLOAT
             @endtoken
             @goto BEGIN
         elseif UInt8('0') ≤ c ≤ UInt8('9')
             @goto EXPONENT_FLOAT
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken FLOAT
                 @goto EXPONENT_FLOAT_SPACE
             else
@@ -709,13 +733,16 @@ function scanline!(
             quoted = false
             @goto QUOTE_END
         elseif c == delim
+            if quoted
+                @goto STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
-            if trim
+            if trim && !quoted
                 @recordtoken STRING
                 @goto STRING_SPACE
             else
