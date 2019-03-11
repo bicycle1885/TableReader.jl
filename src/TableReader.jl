@@ -20,7 +20,7 @@ using CodecXz:
     XzDecompressorStream
 
 const DEFAULT_BUFFER_SIZE = 8 * 2^20  # 8 MiB
-const MAX_BUFFERED_ROWS = 100
+const MAX_BUFFERED_ROWS = 1000
 
 # Printable characters
 const CHARS_PRINT = ' ':'~'
