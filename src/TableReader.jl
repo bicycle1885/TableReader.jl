@@ -171,11 +171,12 @@ struct Token
     # From most significant
     #    4bit: kind (+ missing)
     #   30bit: start positin
-    #   30bit: end position
+    #   30bit: length
+    # 30 bits = 1 GiB
     value::UInt64
 
-    function Token(kind::UInt8, start::Int, stop::Int)
-        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(stop))
+    function Token(kind::UInt8, start::Int, len::Int)
+        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(len))
     end
 end
 
@@ -187,12 +188,7 @@ function ismissing(token::Token)
     return (token.value & (UInt64(1) << 63)) != 0
 end
 
-function range(token::Token)
-    x = token.value & (~UInt64(0) >> 4)
-    return (x >> 30) % Int : (x & (~UInt64(0) >> 34)) % Int
-end
-
-function bounds(token::Token)
+function location(token::Token)
     x = token.value & (~UInt64(0) >> 4)
     return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
 end
@@ -212,8 +208,8 @@ end
 
 function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
-        start, stop = bounds(tokens[c,i])
-        col[end-nvals+i] = parse_integer(mem, start, stop)
+        start, length = location(tokens[c,i])
+        col[end-nvals+i] = parse_integer(mem, start, length)
     end
     return col
 end
@@ -224,16 +220,17 @@ function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, t
         if ismissing(t)
             col[end-nvals+i] = missing
         else
-            start, stop = bounds(t)
-            col[end-nvals+i] = parse_integer(mem, start, stop)
+            start, length = location(t)
+            col[end-nvals+i] = parse_integer(mem, start, length)
         end
     end
     return col
 end
 
-@inline function parse_integer(mem::Memory, start::Int, stop::Int)
+@inline function parse_integer(mem::Memory, start::Int, length::Int)
+    stop = start + length - 1
     i = start
-    b = mem[start]
+    b = mem[i]
     if b == UInt8('-')
         sign = -1
         i += 1
@@ -254,8 +251,8 @@ end
 
 function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
-        start, stop = bounds(tokens[c,i])
-        col[end-nvals+i] = parse_float(mem, start, stop)
+        start, length = location(tokens[c,i])
+        col[end-nvals+i] = parse_float(mem, start, length)
     end
     return col
 end
@@ -266,23 +263,23 @@ function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memor
         if ismissing(t)
             col[end-nvals+i] = missing
         else
-            start, stop = bounds(t)
-            col[end-nvals+i] = parse_float(mem, start, stop)
+            start, length = location(tokens[c,i])
+            col[end-nvals+i] = parse_float(mem, start, length)
         end
     end
     return col
 end
 
-@inline function parse_float(mem::Memory, start::Int, stop::Int)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start-1, stop - start + 1)
+@inline function parse_float(mem::Memory, start::Int, length::Int)
+    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start-1, length)
     @assert hasvalue
     return val
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
     for i in 1:nvals
-        start, stop = bounds(tokens[c,i])
-        col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
+        start, length = location(tokens[c,i])
+        col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
     end
     return col
 end
@@ -293,8 +290,8 @@ function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory
         if ismissing(t)
             col[end-nvals+i] = missing
         else
-            start, stop = bounds(tokens[c,i])
-            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, stop - start + 1)
+            start, length = location(tokens[c,i])
+            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
         end
     end
     return col
@@ -363,7 +360,7 @@ macro recordtoken(kind)
         if i > ncols
             @goto ERROR
         end
-        tokens[i,row] = Token($(kind), token, pos - 1)
+        tokens[i,row] = Token($(kind), token, pos - token)
     end |> esc
 end
 
