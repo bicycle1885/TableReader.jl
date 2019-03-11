@@ -35,16 +35,41 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
     end
 end
 
-function readdlm(
-        stream::TranscodingStream;
-        delim::Char,
-        quot::Char = DEFAULT_QUOTE,
-        trim::Bool = DEFAULT_TRIM,
-    )
-    check_parser_parameters(delim, quot, trim)
-    delim_byte = UInt8(delim)
-    quot_byte = UInt8(quot)
-    colnames = readheader(stream, delim_byte, quot_byte, trim)
+for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
+    if delim === nothing
+        delimarg = :(delim::Char)
+    else
+        delimarg = Expr(:kw, :(delim::Char), delim)
+    end
+    @eval begin
+        function $(fname)(filename::AbstractString;
+                          $(delimarg),
+                          quot::Char = '"',
+                          trim::Bool = true,
+                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+            check_parser_parameters(delim, quot, trim)
+            return open(filename) do file
+                file = NoopStream(file, bufsize = bufsize)
+                return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
+            end
+        end
+
+        function $(fname)(file::IO;
+                          $(delimarg),
+                          quot::Char = '"',
+                          trim::Bool = true,
+                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+            check_parser_parameters(delim, quot, trim)
+            if !(file isa TranscodingStream)
+                file = NoopStream(file, bufsize = bufsize)
+            end
+            return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
+        end
+    end
+end
+
+function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
+    colnames = readheader(stream, delim, quot, trim)
     ncols = length(colnames)
     if ncols == 0
         return DataFrame()
@@ -61,7 +86,7 @@ function readdlm(
         pos = 0
         block_begin = line
         while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
-            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim_byte, quot_byte, trim)
+            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
             line += 1
         end
         n_new_records = line - block_begin
@@ -120,39 +145,6 @@ function readdlm(
         skip(stream, pos)
     end
     return DataFrame(columns, colnames)
-end
-
-for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
-    if delim === nothing
-        delimarg = :(delim::Char)
-    else
-        delimarg = Expr(:kw, :(delim::Char), delim)
-    end
-    @eval begin
-        function $(fname)(filename::AbstractString;
-                          $(delimarg),
-                          quot::Char = '"',
-                          trim::Bool = true,
-                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
-            check_parser_parameters(delim, quot, trim)
-            return open(filename) do file
-                file = NoopStream(file, bufsize = bufsize)
-                return readdlm(file, delim = delim, quot = quot, trim = trim)
-            end
-        end
-
-        function $(fname)(file::IO;
-                          $(delimarg),
-                          quot::Char = '"',
-                          trim::Bool = true,
-                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
-            check_parser_parameters(delim, quot, trim)
-            if !(file isa TranscodingStream)
-                file = NoopStream(file, bufsize = bufsize)
-            end
-            return readdlm(file, delim = delim, quot = quot, trim = trim)
-        end
-    end
 end
 
 # field kind
