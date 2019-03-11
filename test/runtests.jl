@@ -178,6 +178,23 @@ using Test
         @test ismissing(df[2,:col3])
     end
 
+    @testset "large integer" begin
+        data = """
+        col1\tcol2
+        $(typemax(Int))\t$(typemin(Int))
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [typemax(Int)]
+        @test df[:col2] == [typemin(Int)]
+
+        # not supported
+        data = """
+        col1
+        99999999999999999999999
+        """
+        @test_throws OverflowError readtsv(IOBuffer(data))
+    end
+
     @testset "malformed file" begin
         # less columns than expected
         data = """

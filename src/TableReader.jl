@@ -227,8 +227,18 @@ function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, t
     return col
 end
 
+const SAFE_INT_LENGTH = sizeof(string(typemax(Int))) - 1
+
 @inline function parse_integer(mem::Memory, start::Int, length::Int)
     stop = start + length - 1
+    if length > SAFE_INT_LENGTH
+        # safe but slow fallback
+        buf = IOBuffer()
+        for i in start:stop
+            write(buf, mem[i])
+        end
+        return parse(Int, String(take!(buf)))
+    end
     i = start
     b = mem[i]
     if b == UInt8('-')
