@@ -378,9 +378,12 @@ function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memor
 end
 
 @inline function parse_float(mem::Memory, start::Int, length::Int)
+    return ccall(:strtod, Cdouble, (Ptr{UInt8}, Ptr{Cvoid}), mem.ptr + start - 1, C_NULL)
+    #=  The above would be safe and faster.
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start-1, length)
     @assert hasvalue
     return val
+    =#
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
