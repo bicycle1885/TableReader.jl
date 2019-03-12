@@ -492,7 +492,7 @@ macro multibytestring()
 end
 
 macro begintoken()
-    esc(:(token = pos))
+    esc(:(start = pos))
 end
 
 macro recordtoken(kind)
@@ -500,7 +500,7 @@ macro recordtoken(kind)
         if i > ncols
             @goto ERROR
         end
-        tokens[i,row] = Token($(kind), token, pos - token)
+        tokens[i,row] = Token($(kind), start, pos - start)
     end |> esc
 end
 
@@ -532,7 +532,7 @@ function scanline!(
     ncols = size(tokens, 1)
     quoted = false
     qstring = false
-    token = 0  # the starting position of a token
+    start = 0  # the starting position of a token
     i = 1  # the current token
 
     @state BEGIN begin
