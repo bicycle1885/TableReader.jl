@@ -251,11 +251,11 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     return DataFrame(columns, colnames)
 end
 
-# field kind
+# token kind
 const STRING  = 0b0000
 const INTEGER = 0b0001
 const FLOAT   = 0b0010
-const MISSING = 0b1111  # missing can be any data type
+const MISSING = 0b1011  # missing can be any data type
 
 struct Token
     # From most significant
@@ -425,12 +425,15 @@ macro state(name, ex)
     @assert ex isa Expr && ex.head == :block
     esc(quote
         @label $(name)
+        #println($(QuoteNode(name)))
+        #@show quoted
         pos += 1
         if pos > pos_end
             @goto END
         end
         @inbounds c = mem[pos]
         #@show Char(c)
+        #println()
         $(ex)
         # multibyte UTF8 character
         if 0b110_00000 ≤ c ≤ 0b110_11111
@@ -497,8 +500,6 @@ function scanline!(
         if c == quot
             if quoted
                 @recordtoken MISSING
-                @endtoken
-                quoted = false
                 @goto QUOTE_END
             else
                 quoted = true
@@ -543,8 +544,6 @@ function scanline!(
     @state SIGN begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -580,8 +579,6 @@ function scanline!(
     @state INTEGER begin
         if quoted && c == quot
             @recordtoken INTEGER|FLOAT
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -619,8 +616,6 @@ function scanline!(
     @state INTEGER_SPACE begin
         if quoted && c == quot  # TODO: this will not happen?
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == UInt8(' ')
             @goto INTEGER_SPACE
@@ -641,8 +636,6 @@ function scanline!(
     @state DOT begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -676,8 +669,6 @@ function scanline!(
     @state POINT_FLOAT begin
         if quoted && c == quot
             @recordtoken FLOAT
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -713,8 +704,6 @@ function scanline!(
     @state POINT_FLOAT_SPACE begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == UInt8(' ')
             @goto POINT_FLOAT_SPACE
@@ -736,8 +725,6 @@ function scanline!(
     @state EXPONENT begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -773,8 +760,6 @@ function scanline!(
     @state EXPONENT_SIGN begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -808,8 +793,6 @@ function scanline!(
     @state EXPONENT_FLOAT begin
         if quoted && c == quot
             @recordtoken FLOAT
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -843,8 +826,6 @@ function scanline!(
     @state EXPONENT_FLOAT_SPACE begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == UInt8(' ')
             @goto EXPONENT_FLOAT_SPACE
@@ -865,8 +846,6 @@ function scanline!(
     @state STRING begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == delim
             if quoted
@@ -898,8 +877,6 @@ function scanline!(
     @state STRING_SPACE begin
         if quoted && c == quot
             @recordtoken STRING
-            @endtoken
-            quoted = false
             @goto QUOTE_END
         elseif c == UInt8(' ')
             @goto STRING_SPACE
@@ -919,13 +896,35 @@ function scanline!(
 
     @state QUOTE_END begin
         if c == delim
+            quoted = false
+            @endtoken
             @goto BEGIN
+        elseif c == quot  # e.g. xxx," foo ""bar""",xxx
+            @goto STRING
         elseif c == UInt8(' ')
+            quoted = false
             if trim
-                @goto QUOTE_END
+                @goto QUOTE_END_SPACE
             else
                 @goto ERROR
             end
+        elseif c == UInt8('\n')
+            quoted = false
+            @endtoken
+            @goto END
+        elseif c == UInt8('\r')
+            quoted = false
+            @endtoken
+            @goto CR_LF
+        end
+    end
+
+    @state QUOTE_END_SPACE begin
+        if c == delim
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            @goto QUOTE_END_SPACE
         elseif c == UInt8('\n')
             @endtoken
             @goto END
