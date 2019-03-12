@@ -88,6 +88,15 @@ using Test
         @test df[:col1] == ["a", "foo"]
         @test df[:col2] == ["b", "bar"]
         @test df[:col3] == ["c", "baz"]
+
+        # quotation marks in a quoted string
+        buffer = IOBuffer("""
+        col1\tcol2
+        " ""OK"" "\t"\""OK"\""
+        """)
+        df = readtsv(buffer)
+        @test df[:col1] == [" \"OK\" "]
+        @test df[:col2] == ["\"OK\""]
     end
 
     @testset "trimming" begin

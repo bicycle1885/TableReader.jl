@@ -241,7 +241,7 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
         for i in 1:ncols
             col = columns[i]
             resize!(col, length(col) + n_new_records)
-            fillcolumn!(col, n_new_records, mem, tokens, i)
+            fillcolumn!(col, n_new_records, mem, tokens, i, quot)
         end
         skip(stream, pos)
         if !chunking
@@ -255,6 +255,7 @@ end
 const STRING  = 0b0000
 const INTEGER = 0b0001
 const FLOAT   = 0b0010
+const QSTRING = 0b0100  # string with quotation marks
 const MISSING = 0b1011  # missing can be any data type
 
 struct Token
@@ -297,7 +298,7 @@ function find_last_newline(mem::Memory)
     return i
 end
 
-function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
         start, length = location(tokens[c,i])
         col[end-nvals+i] = parse_integer(mem, start, length)
@@ -305,7 +306,7 @@ function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{T
     return col
 end
 
-function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
@@ -350,7 +351,7 @@ const SAFE_INT_LENGTH = sizeof(string(typemax(Int))) - 1
     return sign * n
 end
 
-function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
         start, length = location(tokens[c,i])
         col[end-nvals+i] = parse_float(mem, start, length)
@@ -358,7 +359,7 @@ function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matr
     return col
 end
 
-function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
@@ -377,25 +378,51 @@ end
     return val
 end
 
-function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
-        start, length = location(tokens[c,i])
-        col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
+        t = tokens[c,i]
+        start, length = location(t)
+        if kind(t) & QSTRING != 0
+            col[end-nvals+i] = qstring(mem, start, length, quot)
+        else
+            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
+        end
     end
     return col
 end
 
-function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int)
+function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
         else
             start, length = location(tokens[c,i])
-            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
+            if kind(t) & QSTRING != 0
+                col[end-nvals+1] = qstring(mem, start, length, quot)
+            else
+                col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
+            end
         end
     end
     return col
+end
+
+function qstring(mem::Memory, start::Int, length::Int, quot::UInt8)
+    i = start
+    skip = false
+    buf = IOBuffer()
+    while i < start + length
+        if skip
+            skip = false
+        else
+            x = mem[i]
+            write(buf, x)
+            skip = x == quot
+        end
+        i += 1
+    end
+    return String(take!(buf))
 end
 
 # Read header and return column names.
@@ -470,7 +497,11 @@ macro recordtoken(kind)
 end
 
 macro endtoken()
-    esc(:(i += 1))
+    quote
+        i += 1
+        quoted = false
+        qstring = false
+    end |> esc
 end
 
 # Scan a line in mem; mem must include one or more lines.
@@ -492,6 +523,7 @@ function scanline!(
     pos_end = lastnl
     ncols = size(tokens, 1)
     quoted = false
+    qstring = false
     token = 0  # the starting position of a token
     i = 1  # the current token
 
@@ -836,30 +868,51 @@ function scanline!(
 
     @state STRING begin
         if quoted && c == quot
-            @recordtoken STRING
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
             @goto QUOTE_END
         elseif c == delim
             if quoted
                 @goto STRING
             end
-            @recordtoken STRING
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
             @endtoken
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8(' ')
             if trim && !quoted
-                @recordtoken STRING
+                if qstring
+                    @recordtoken QSTRING
+                else
+                    @recordtoken STRING
+                end
                 @goto STRING_SPACE
             else
                 @goto STRING
             end
         elseif c == UInt8('\n')
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
             @recordtoken STRING
             @endtoken
             @goto END
         elseif c == UInt8('\r')
-            @recordtoken STRING
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
             @endtoken
             @goto CR_LF
         end
@@ -884,24 +937,21 @@ function scanline!(
 
     @state QUOTE_END begin
         if c == delim
-            quoted = false
             @endtoken
             @goto BEGIN
         elseif c == quot  # e.g. xxx," foo ""bar""",xxx
+            qstring = true
             @goto STRING
         elseif c == UInt8(' ')
-            quoted = false
             if trim
                 @goto QUOTE_END_SPACE
             else
                 @goto ERROR
             end
         elseif c == UInt8('\n')
-            quoted = false
             @endtoken
             @goto END
         elseif c == UInt8('\r')
-            quoted = false
             @endtoken
             @goto CR_LF
         end
