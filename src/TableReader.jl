@@ -673,6 +673,8 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
