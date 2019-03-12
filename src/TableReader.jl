@@ -170,13 +170,14 @@ const MISSING = 0b1111  # missing can be any data type
 struct Token
     # From most significant
     #    4bit: kind (+ missing)
-    #   30bit: start positin
-    #   30bit: length
-    # 30 bits = 1 GiB
+    #   36bit: start position (64 GiB)
+    #   24bit: length (16 MiB)
     value::UInt64
 
     function Token(kind::UInt8, start::Int, len::Int)
-        return new((UInt64(kind) << 60) | (UInt64(start) << 30) | UInt64(len))
+        @assert start < 2^36
+        @assert len < 2^24
+        return new((UInt64(kind) << 60) | (UInt64(start) << 24) | UInt64(len))
     end
 end
 
@@ -190,7 +191,7 @@ end
 
 function location(token::Token)
     x = token.value & (~UInt64(0) >> 4)
-    return (x >> 30) % Int, (x & (~UInt64(0) >> 34)) % Int
+    return (x >> 24) % Int, (x & (~UInt64(0) >> 40)) % Int
 end
 
 function find_last_newline(mem::Memory)
