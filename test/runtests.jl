@@ -89,6 +89,16 @@ using Test
         @test df[:col2] == ["b", "bar"]
         @test df[:col3] == ["c", "baz"]
 
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        foo\tbar\tbaz
+        foo\tbar\tbaz
+        """)
+        df = readtsv(buffer)
+        @test df[:col1] == ["foo", "foo"]
+        @test df[:col2] == ["bar", "bar"]
+        @test df[:col3] == ["baz", "baz"]
+
         # quotation marks in a quoted string
         buffer = IOBuffer("""
         col1\tcol2
