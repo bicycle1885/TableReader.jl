@@ -29,7 +29,7 @@ const CHARS_PRINT = ' ':'~'
 # Whitelist of delimiters
 const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
 
-function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
+function check_parser_parameters(delim::Char, quot::Char, trim::Bool, chunksize::Integer)
     if delim ∉ ALLOWED_DELIMITERS
         throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
     elseif delim == quot
@@ -38,6 +38,8 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
         throw(ArgumentError("space delimiter and space trimming are exclusive"))
     elseif quot == ' ' && trim
         throw(ArgumentError("space quote and space trimming are exclusive"))
+    elseif chunksize < 0
+        throw(ArgumentError("chunks size cannot be negative"))
     end
 end
 
@@ -96,7 +98,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           quot::Char = '"',
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
-            check_parser_parameters(delim, quot, trim)
+            check_parser_parameters(delim, quot, trim, chunksize)
             bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
             return open(filename) do file
                 if endswith(filename, ".gz")
@@ -117,7 +119,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           quot::Char = '"',
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
-            check_parser_parameters(delim, quot, trim)
+            check_parser_parameters(delim, quot, trim, chunksize)
             bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
             if !(file isa TranscodingStream)
                 file = NoopStream(file, bufsize = bufsize)

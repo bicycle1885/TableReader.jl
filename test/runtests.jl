@@ -223,6 +223,10 @@ using Test
         @test df[:col3] == ["丙", "🐸🐓"]
     end
 
+    @testset "invalid argument" begin
+        @test_throws ArgumentError readtsv(IOBuffer(""), chunksize = -1)
+    end
+
     @testset "large data" begin
         buf = IOBuffer()
         m = 10000
