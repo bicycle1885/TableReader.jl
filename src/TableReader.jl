@@ -524,11 +524,17 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
-            if i == ncols  # TODO
+            if i == ncols
                 @recordtoken MISSING
             end
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            if i == ncols
+                @recordtoken MISSING
+            end
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -562,6 +568,10 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -597,6 +607,10 @@ function scanline!(
             @recordtoken INTEGER|FLOAT
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken INTEGER|FLOAT
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -616,6 +630,9 @@ function scanline!(
         elseif c == UInt8('\n')
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -647,6 +664,10 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -680,6 +701,10 @@ function scanline!(
             @recordtoken FLOAT
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken FLOAT
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -700,6 +725,9 @@ function scanline!(
         elseif c == UInt8('\n')
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -733,6 +761,10 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -764,6 +796,10 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -795,6 +831,10 @@ function scanline!(
             @recordtoken FLOAT
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken FLOAT
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -814,6 +854,9 @@ function scanline!(
         elseif c == UInt8('\n')
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -843,6 +886,10 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -862,6 +909,9 @@ function scanline!(
         elseif c == UInt8('\n')
             @endtoken
             @goto END
+        elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
         end
     end
 
@@ -876,6 +926,15 @@ function scanline!(
             end
         elseif c == UInt8('\n')
             @endtoken
+            @goto END
+        elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
+        end
+    end
+
+    @state CR_LF begin
+        if c == UInt8('\n')
             @goto END
         end
     end

@@ -223,6 +223,38 @@ using Test
         @test df[:col3] == ["丙", "🐸🐓"]
     end
 
+    @testset "CR+LF" begin
+        data = """
+        col1\tcol2\tcol3\r
+        1\t2\t3\r
+        4\t5\t6 \r
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, 4]
+        @test df[:col2] == [2, 5]
+        @test df[:col3] == [3, 6]
+
+        data = """
+        col1\tcol2\tcol3\r
+        1.0\t2.0\t3.0\r
+        4.0\t5.0\t6.0 \r
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1.0, 4.0]
+        @test df[:col2] == [2.0, 5.0]
+        @test df[:col3] == [3.0, 6.0]
+
+        data = """
+        col1\tcol2\tcol3\r
+        foo\tbar\tbaz\r
+        hoge\tfuga\tpiyo \r
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == ["foo", "hoge"]
+        @test df[:col2] == ["bar", "fuga"]
+        @test df[:col3] == ["baz", "piyo"]
+    end
+
     @testset "invalid argument" begin
         @test_throws ArgumentError readtsv(IOBuffer(""), chunksize = -1)
     end
