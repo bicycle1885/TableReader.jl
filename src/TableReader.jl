@@ -137,7 +137,7 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     end
     tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
     #fill!(tokens, Token(0x00, 0, 0))
-    n_block_rows = size(tokens, 2)
+    n_chunk_rows = size(tokens, 2)
     columns = Vector[]
     line = 2
     while !eof(stream)
@@ -146,12 +146,12 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
         lastnl = find_last_newline(mem)
         @assert lastnl > 0  # TODO
         pos = 0
-        block_begin = line
-        while pos < lastnl && line - block_begin + 1 ≤ n_block_rows
-            pos = scanline!(tokens, line - block_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+        chunk_begin = line
+        while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
+            pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
             line += 1
         end
-        n_new_records = line - block_begin
+        n_new_records = line - chunk_begin
         if isempty(columns)
             resize!(columns, ncols)
             # infer data types of columns
