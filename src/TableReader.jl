@@ -197,7 +197,7 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
             for i in 1:ncols
                 parsable = 0b0111
                 hasmissing = false
-                for j in 1:n_new_records
+                @inbounds for j in 1:n_new_records
                     x = kind(tokens[i,j])
                     parsable &= x
                     hasmissing |= (x & 0b1000) != 0
@@ -215,7 +215,7 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
             for i in 1:ncols
                 parsable = 0b0111
                 hasmissing = false
-                for j in 1:n_new_records
+                @inbounds for j in 1:n_new_records
                     x = kind(tokens[i,j])
                     parsable &= x
                     hasmissing |= (x & 0b1000) != 0
@@ -304,7 +304,7 @@ function find_last_newline(mem::Memory)
 end
 
 function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         start, length = location(tokens[c,i])
         col[end-nvals+i] = parse_integer(mem, start, length)
     end
@@ -312,7 +312,7 @@ function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{T
 end
 
 function fillcolumn!(col::Vector{Union{Int,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
@@ -357,7 +357,7 @@ const SAFE_INT_LENGTH = sizeof(string(typemax(Int))) - 1
 end
 
 function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         start, length = location(tokens[c,i])
         col[end-nvals+i] = parse_float(mem, start, length)
     end
@@ -365,7 +365,7 @@ function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matr
 end
 
 function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
@@ -387,7 +387,7 @@ end
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         t = tokens[c,i]
         start, length = location(t)
         if kind(t) & QSTRING != 0
@@ -400,7 +400,7 @@ function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matri
 end
 
 function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    for i in 1:nvals
+    @inbounds for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
