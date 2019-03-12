@@ -614,10 +614,7 @@ function scanline!(
     end
 
     @state INTEGER_SPACE begin
-        if quoted && c == quot  # TODO: this will not happen?
-            @recordtoken STRING
-            @goto QUOTE_END
-        elseif c == UInt8(' ')
+        if c == UInt8(' ')
             @goto INTEGER_SPACE
         elseif c == delim
             @endtoken
@@ -702,10 +699,7 @@ function scanline!(
     end
 
     @state POINT_FLOAT_SPACE begin
-        if quoted && c == quot
-            @recordtoken STRING
-            @goto QUOTE_END
-        elseif c == UInt8(' ')
+        if c == UInt8(' ')
             @goto POINT_FLOAT_SPACE
         elseif c == delim
             @recordtoken FLOAT
@@ -824,10 +818,7 @@ function scanline!(
     end
 
     @state EXPONENT_FLOAT_SPACE begin
-        if quoted && c == quot
-            @recordtoken STRING
-            @goto QUOTE_END
-        elseif c == UInt8(' ')
+        if c == UInt8(' ')
             @goto EXPONENT_FLOAT_SPACE
         elseif c == delim
             @endtoken
@@ -875,10 +866,7 @@ function scanline!(
     end
 
     @state STRING_SPACE begin
-        if quoted && c == quot
-            @recordtoken STRING
-            @goto QUOTE_END
-        elseif c == UInt8(' ')
+        if c == UInt8(' ')
             @goto STRING_SPACE
         elseif c == delim
             @endtoken
