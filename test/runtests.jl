@@ -239,7 +239,17 @@ using Test
             end
             println(buf)
         end
-        df = readtsv(IOBuffer(take!(buf)))
+        data = take!(buf)
+
+        # with chunking
+        df = readtsv(IOBuffer(data))
+        @test size(df) == (m, n + 1)
+        @test df[:name] == ["row$(i)" for i in 1:m]
+        @test df[:col1] == 1:m
+        @test df[:col2] == 1:m
+
+        # without chunking
+        df = readtsv(IOBuffer(data), chunksize = 0)
         @test size(df) == (m, n + 1)
         @test df[:name] == ["row$(i)" for i in 1:m]
         @test df[:col1] == 1:m

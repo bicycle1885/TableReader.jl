@@ -10,6 +10,8 @@ using TranscodingStreams:
     NoopStream,
     Memory,
     Buffer,
+    State,
+    Noop,
     fillbuffer,
     buffermem
 using CodecZlib:
@@ -99,18 +101,35 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim, chunksize)
-            bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
             return open(filename) do file
-                if endswith(filename, ".gz")
-                    file = GzipDecompressorStream(file, bufsize = bufsize)
-                elseif endswith(filename, ".zst")
-                    file = ZstdDecompressorStream(file, bufsize = bufsize)
-                elseif endswith(filename, ".xz")
-                    file = XzDecompressorStream(file, bufsize = bufsize)
+                if chunksize == 0
+                    # without chunking
+                    bufsize = DEFAULT_CHUNK_SIZE
+                    if endswith(filename, ".gz")
+                        data = read(GzipDecompressorStream(file, bufsize = bufsize))
+                    elseif endswith(filename, ".zst")
+                        data = read(ZstdDecompressorStream(file, bufsize = bufsize))
+                    elseif endswith(filename, ".xz")
+                        data = read(XzDecompressorStream(file, bufsize = bufsize))
+                    else
+                        data = read(file)
+                    end
+                    buffer = Buffer(data)
+                    stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
                 else
-                    file = NoopStream(file, bufsize = bufsize)
+                    # with chunking
+                    bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
+                    if endswith(filename, ".gz")
+                        stream = GzipDecompressorStream(file, bufsize = bufsize)
+                    elseif endswith(filename, ".zst")
+                        stream = ZstdDecompressorStream(file, bufsize = bufsize)
+                    elseif endswith(filename, ".xz")
+                        stream = XzDecompressorStream(file, bufsize = bufsize)
+                    else
+                        stream = NoopStream(file, bufsize = bufsize)
+                    end
                 end
-                return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
+                return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
             end
         end
 
@@ -120,16 +139,23 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim, chunksize)
-            bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-            if !(file isa TranscodingStream)
-                file = NoopStream(file, bufsize = bufsize)
+            if chunksize == 0
+                buffer = Buffer(read(file))
+                stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
+            else
+                bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
+                if file isa TranscodingStream
+                    stream = file
+                else
+                    stream = NoopStream(file, bufsize = bufsize)
+                end
             end
-            return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
+            return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
         end
     end
 end
 
-function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
+function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool, chunking::Bool)
     colnames = readheader(stream, delim, quot, trim)
     ncols = length(colnames)
     if ncols == 0
@@ -147,9 +173,22 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
         @assert lastnl > 0  # TODO
         pos = 0
         chunk_begin = line
-        while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
-            pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
-            line += 1
+        if chunking
+            while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
+                pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                line += 1
+            end
+        else
+            while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
+                pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                line += 1
+                if line - chunk_begin + 1 > n_chunk_rows
+                    tokens′ = Array{Token}(undef, (ncols, n_chunk_rows * 2))
+                    tokens′[:,1:n_chunk_rows] = tokens
+                    tokens = tokens′
+                    n_chunk_rows = size(tokens, 2)
+                end
+            end
         end
         n_new_records = line - chunk_begin
         if isempty(columns)
@@ -205,6 +244,9 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
             fillcolumn!(col, n_new_records, mem, tokens, i)
         end
         skip(stream, pos)
+        if !chunking
+            @assert eof(stream)
+        end
     end
     return DataFrame(columns, colnames)
 end
