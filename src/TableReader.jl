@@ -258,6 +258,9 @@ const FLOAT   = 0b0010
 const QSTRING = 0b0100  # string with quotation marks
 const MISSING = 0b1011  # missing can be any data type
 
+const MAX_TOKEN_START = 2^36
+const MAX_TOKEN_LENGTH = 2^24
+
 struct Token
     # From most significant
     #    4bit: kind (+ missing)
@@ -266,8 +269,8 @@ struct Token
     value::UInt64
 
     function Token(kind::UInt8, start::Int, len::Int)
-        @assert start < 2^36
-        @assert len < 2^24
+        @assert start < MAX_TOKEN_START
+        @assert len < MAX_TOKEN_LENGTH
         return new((UInt64(kind) << 60) | (UInt64(start) << 24) | UInt64(len))
     end
 end
