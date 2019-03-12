@@ -272,6 +272,8 @@ struct Token
     end
 end
 
+const TOKEN_NULL = Token(0x00, 0, 0)
+
 function kind(token::Token)
     return (token.value >> 60) % UInt8
 end
@@ -497,15 +499,16 @@ end
 
 macro recordtoken(kind)
     quote
-        if i > ncols
-            @goto ERROR
-        end
-        tokens[i,row] = Token($(kind), start, pos - start)
+        token = Token($(kind), start, pos - start)
     end |> esc
 end
 
 macro endtoken()
     quote
+        if i > ncols
+            @goto ERROR
+        end
+        @inbounds tokens[i,row] = token
         i += 1
         quoted = false
         qstring = false
@@ -532,6 +535,7 @@ function scanline!(
     ncols = size(tokens, 1)
     quoted = false
     qstring = false
+    token = TOKEN_NULL
     start = 0  # the starting position of a token
     i = 1  # the current token
 
