@@ -370,4 +370,17 @@ end
         @test df[:col1] == ["hi, there", "1,2,3,4"]
         @test df[:col2] == [",", ",,,"]
     end
+
+    @testset "missing" begin
+        data = """
+        "col1","col2"
+        "",""
+        "1","2"
+        """
+        df = readcsv(IOBuffer(data))
+        @test ismissing(df[1,:col1])
+        @test df[2,:col1] == 1
+        @test ismissing(df[1,:col2])
+        @test df[2,:col2] == 2
+    end
 end

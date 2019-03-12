@@ -430,6 +430,7 @@ macro state(name, ex)
             @goto END
         end
         @inbounds c = mem[pos]
+        #@show Char(c)
         $(ex)
         # multibyte UTF8 character
         if 0b110_00000 ≤ c ≤ 0b110_11111
@@ -498,10 +499,11 @@ function scanline!(
                 @recordtoken MISSING
                 @endtoken
                 quoted = false
+                @goto QUOTE_END
             else
                 quoted = true
+                @goto BEGIN
             end
-            @goto BEGIN
         elseif c == delim
             if quoted
                 @goto STRING
