@@ -450,7 +450,7 @@ end
 macro state(name, ex)
     @assert name isa Symbol
     @assert ex isa Expr && ex.head == :block
-    esc(quote
+    quote
         @label $(name)
         #println($(QuoteNode(name)))
         #@show quoted
@@ -462,6 +462,13 @@ macro state(name, ex)
         #@show Char(c)
         #println()
         $(ex)
+        # This area is unreachable because transition must be exhaustive.
+        @assert false
+    end |> esc
+end
+
+macro multibytestring()
+    quote
         # multibyte UTF8 character
         if 0b110_00000 ≤ c ≤ 0b110_11111
             if pos + 1 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111)
@@ -478,9 +485,10 @@ macro state(name, ex)
                 pos += 3
                 @goto STRING
             end
+        else
+            @goto ERROR
         end
-        @goto ERROR
-    end)
+    end |> esc
 end
 
 macro begintoken()
@@ -570,6 +578,8 @@ function scanline!(
             end
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -605,6 +615,8 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -642,6 +654,8 @@ function scanline!(
             @recordtoken INTEGER|FLOAT
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -692,6 +706,8 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -727,6 +743,8 @@ function scanline!(
             @recordtoken FLOAT
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -745,6 +763,8 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -780,6 +800,8 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -813,6 +835,8 @@ function scanline!(
             @recordtoken STRING
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -846,6 +870,8 @@ function scanline!(
             @recordtoken FLOAT
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -863,6 +889,8 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -915,6 +943,8 @@ function scanline!(
             end
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -932,6 +962,8 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @multibytestring
         end
     end
 
@@ -954,6 +986,8 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @goto ERROR
         end
     end
 
@@ -969,12 +1003,16 @@ function scanline!(
         elseif c == UInt8('\r')
             @endtoken
             @goto CR_LF
+        else
+            @goto ERROR
         end
     end
 
     @state CR_LF begin
         if c == UInt8('\n')
             @goto END
+        else
+            @goto ERROR
         end
     end
 
