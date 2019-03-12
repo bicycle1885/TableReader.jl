@@ -19,7 +19,7 @@ using CodecZstd:
 using CodecXz:
     XzDecompressorStream
 
-const DEFAULT_BUFFER_SIZE = 1 * 2^20  # 1 MiB
+const DEFAULT_CHUNK_SIZE = 1 * 2^20  # 1 MiB
 const MAX_BUFFERED_ROWS = 1000
 
 # Printable characters
@@ -40,6 +40,49 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool)
     end
 end
 
+"""
+    readdlm(filename or IO object;
+            delim,
+            quot = '"',
+            trim = true,
+            chunksize = $(DEFAULT_CHUNK_SIZE))
+
+Read a character delimited text file.
+
+`delim` specifies the field delimiter in a line. This must be tab, space, or an
+ASCII punctuation character.
+
+`quot` specifies the quotation to enclose a field. This cannot be the same
+character as `delim`.
+
+`trim` specifies whether the parser trims space (0x20) characters around a field.
+If `trim` is true, `delim` and `quot` cannot be a space character.
+
+A text file will be read chunk by chunk to save memory. The chunk size is
+specified by the `chunksize` parameter, which is set to 1 MiB by default.
+The data type of each column is guessed from the values in the first chunk.
+"""
+function readdlm end
+
+"""
+    readtsv(filename or IO object; delim = '\\t', <keyword arguments>)
+
+Read a TSV text file.
+
+This function is the same as [`readdlm`](@ref) but with `delim = '\\t'`.
+See `readdlm` for details.
+"""
+function readtsv end
+
+"""
+    readcsv(filename or IO object; delim = ',', <keyword arguments>)
+
+Read a CSV text file.
+
+This function is the same as [`readdlm`](@ref) but with `delim = ','`.
+"""
+function readcsv end
+
 for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
     if delim === nothing
         delimarg = :(delim::Char)
@@ -51,17 +94,17 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           $(delimarg),
                           quot::Char = '"',
                           trim::Bool = true,
-                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim)
             return open(filename) do file
                 if endswith(filename, ".gz")
-                    file = GzipDecompressorStream(file, bufsize = bufsize)
+                    file = GzipDecompressorStream(file, bufsize = chunksize)
                 elseif endswith(filename, ".zst")
-                    file = ZstdDecompressorStream(file, bufsize = bufsize)
+                    file = ZstdDecompressorStream(file, bufsize = chunksize)
                 elseif endswith(filename, ".xz")
-                    file = XzDecompressorStream(file, bufsize = bufsize)
+                    file = XzDecompressorStream(file, bufsize = chunksize)
                 else
-                    file = NoopStream(file, bufsize = bufsize)
+                    file = NoopStream(file, bufsize = chunksize)
                 end
                 return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
             end
@@ -71,10 +114,10 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           $(delimarg),
                           quot::Char = '"',
                           trim::Bool = true,
-                          bufsize::Integer = DEFAULT_BUFFER_SIZE)
+                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim)
             if !(file isa TranscodingStream)
-                file = NoopStream(file, bufsize = bufsize)
+                file = NoopStream(file, bufsize = chunksize)
             end
             return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
         end
