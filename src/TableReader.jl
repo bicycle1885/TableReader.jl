@@ -19,7 +19,8 @@ using CodecZstd:
 using CodecXz:
     XzDecompressorStream
 
-const DEFAULT_CHUNK_SIZE = 1 * 2^20  # 1 MiB
+const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
+const DEFAULT_CHUNK_SIZE =  1 * 2^20  #  1 MiB
 const MAX_BUFFERED_ROWS = 1000
 
 # Printable characters
@@ -96,15 +97,16 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim)
+            bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
             return open(filename) do file
                 if endswith(filename, ".gz")
-                    file = GzipDecompressorStream(file, bufsize = chunksize)
+                    file = GzipDecompressorStream(file, bufsize = bufsize)
                 elseif endswith(filename, ".zst")
-                    file = ZstdDecompressorStream(file, bufsize = chunksize)
+                    file = ZstdDecompressorStream(file, bufsize = bufsize)
                 elseif endswith(filename, ".xz")
-                    file = XzDecompressorStream(file, bufsize = chunksize)
+                    file = XzDecompressorStream(file, bufsize = bufsize)
                 else
-                    file = NoopStream(file, bufsize = chunksize)
+                    file = NoopStream(file, bufsize = bufsize)
                 end
                 return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
             end
@@ -116,8 +118,9 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim)
+            bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
             if !(file isa TranscodingStream)
-                file = NoopStream(file, bufsize = chunksize)
+                file = NoopStream(file, bufsize = bufsize)
             end
             return readdlm_internal(file, UInt8(delim), UInt8(quot), trim)
         end
