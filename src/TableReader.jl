@@ -106,11 +106,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                     throw(ArgumentError("the curl command is not available"))
                 end
                 # read a remote file
-                return open(`curl --silent $(filename)`) do proc
-                    $(fname)(proc, delim = delim, quot = quot, trim = trim, chunksize = chunksize)
-                end
+                source = `curl --silent $(filename)`
+            else
+                # read a locacl file
+                source = filename
             end
-            return open(filename) do file
+            return open(source) do file
                 if chunksize == 0
                     # without chunking
                     bufsize = DEFAULT_CHUNK_SIZE
