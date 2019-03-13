@@ -181,15 +181,10 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
                 line += 1
             end
         else
-            while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
+            while pos < lastnl
+                @assert line - chunk_begin + 1 ≤ n_chunk_rows
                 pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
                 line += 1
-                if line - chunk_begin + 1 > n_chunk_rows
-                    tokens′ = Array{Token}(undef, (ncols, n_chunk_rows * 2))
-                    tokens′[:,1:n_chunk_rows] = tokens
-                    tokens = tokens′
-                    n_chunk_rows = size(tokens, 2)
-                end
             end
         end
         n_new_records = line - chunk_begin
