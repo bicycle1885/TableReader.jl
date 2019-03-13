@@ -457,31 +457,57 @@ end
 function readheader(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
     fillbuffer(stream, eager = true)
     mem = buffermem(stream.state.buffer1)
-    n, tokens = scanheader(mem, 0, delim, quot, trim)
+    nl = find_first_newline(mem, 1)
+    if nl == 0
+        # TODO: maybe, the header is too long to be stored in the memory buffer
+        return Symbol[]
+    end
+    n, tokens = scanheader(mem, 0, nl, delim, quot, trim)
     skip(stream, n)
     colnames = Symbol[]
     for token in tokens
         start, length = location(token)
-        push!(colnames, Symbol(unsafe_string(mem.ptr + start - 1, length)))
+        if (kind(token) & QSTRING) != 0
+            name = qstring(mem, start, length, quot)
+        else
+            name = unsafe_string(mem.ptr + start - 1, length)
+        end
+        push!(colnames, Symbol(name))
     end
     return colnames
 end
 
-function strip1(s::AbstractString, c::UInt8)
-    char = Char(c)
-    if isempty(s)
-        return s
-    end
-    return chop(s, head = startswith(s, char), tail = endswith(s, char))
-end
+const SP = UInt8(' ')
+const CR = UInt8('\r')
+const LF = UInt8('\n')
 
-struct ReadError <: Exception
-    msg::String
+function find_first_newline(mem::Memory, i::Int)
+    last = lastindex(mem)
+    @inbounds while i ≤ last
+        x = mem[i]
+        if x == CR
+            if i + 1 ≤ last && mem[i+1] == LF
+                i += 1
+            end
+            break
+        elseif x == LF
+            break
+        end
+        i += 1
+    end
+    if i > last
+        return 0
+    end
+    return i
 end
 
 
 # Line parser
 # -----------
+
+struct ReadError <: Exception
+    msg::String
+end
 
 macro state(name, ex)
     @assert name isa Symbol
@@ -556,13 +582,13 @@ macro endheadertoken()
     end |> esc
 end
 
-function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool)
+function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, trim::Bool)
     tokens = Token[]
     token = TOKEN_NULL
     quoted = false
     qstring = false
     start = 0
-    pos_end = pos + length(mem)
+    pos_end = nl
 
     @state BEGIN begin
         @begintoken
@@ -577,21 +603,22 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
             if quoted
                 @goto STRING
             end
-            @recordtoken MISSING
+            @recordtoken STRING
             @endheadertoken
             @goto BEGIN
-        elseif c == UInt8(' ')
+        elseif c == SP
             if trim && !quoted
                 @goto BEGIN
             end
             @goto STRING
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
-        elseif c == UInt8('\n')
+        elseif c == LF
             @recordtoken STRING
             @endheadertoken
             @goto END
-        elseif c == UInt8('\r')
+        elseif c == CR
+            @recordtoken STRING
             @endheadertoken
             @goto CR
         else
@@ -620,7 +647,7 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
-        elseif c == UInt8(' ')
+        elseif c == SP
             if trim && !quoted
                 if qstring
                     @recordtoken QSTRING
@@ -630,7 +657,7 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
                 @goto STRING_SPACE
             end
             @goto STRING
-        elseif c == UInt8('\n')
+        elseif c == LF
             if qstring
                 @recordtoken QSTRING
             else
@@ -639,7 +666,7 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
             @recordtoken STRING
             @endheadertoken
             @goto END
-        elseif c == UInt8('\r')
+        elseif c == CR
             @recordtoken STRING
             @endheadertoken
             @goto CR
@@ -649,17 +676,17 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
     end
 
     @state STRING_SPACE begin
-        if c == UInt8(' ')
+        if c == SP
             @goto STRING_SPACE
         elseif c == delim
             @endheadertoken
             @goto BEGIN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
-        elseif c == UInt8('\n')
+        elseif c == LF
             @endheadertoken
             @goto END
-        elseif c == UInt8('\r')
+        elseif c == CR
             @endheadertoken
             @goto CR
         else
@@ -674,15 +701,15 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
         elseif c == quot
             qstring = true
             @goto STRING
-        elseif c == UInt8(' ')
+        elseif c == SP
             if trim
                 @goto QUOTE_END_SPACE
             end
             @goto ERROR
-        elseif c == UInt8('\n')
+        elseif c == LF
             @endheadertoken
             @goto END
-        elseif c == UInt8('\r')
+        elseif c == CR
             @endheadertoken
             @goto CR
         else
@@ -694,12 +721,12 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
         if c == delim
             @endheadertoken
             @goto BEGIN
-        elseif c == UInt8(' ')
+        elseif c == SP
             @goto QUOTE_END_SPACE
-        elseif c == UInt8('\n')
+        elseif c == LF
             @endheadertoken
             @goto END
-        elseif c == UInt8('\r')
+        elseif c == CR
             @endheadertoken
             @goto CR
         else
@@ -708,7 +735,7 @@ function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool
     end
 
     @state CR begin
-        if c == UInt8('\n')
+        if c == LF
             @goto END
         else
             @goto ERROR
