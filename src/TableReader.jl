@@ -455,12 +455,16 @@ end
 
 # Read header and return column names.
 function readheader(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
-    # TODO: be more careful
-    header = readline(stream)
-    if all(isequal(' '), header)
-        return Symbol[]
+    fillbuffer(stream, eager = true)
+    mem = buffermem(stream.state.buffer1)
+    n, tokens = scanheader(mem, 0, delim, quot, trim)
+    skip(stream, n)
+    colnames = Symbol[]
+    for token in tokens
+        start, length = location(token)
+        push!(colnames, Symbol(unsafe_string(mem.ptr + start - 1, length)))
     end
-    return [Symbol(trim ? strip(strip1(x, quot)) : strip1(x, quot)) for x in split(header, Char(delim))]
+    return colnames
 end
 
 function strip1(s::AbstractString, c::UInt8)
@@ -542,6 +546,180 @@ macro recordtoken(kind)
     quote
         token = Token($(kind), start, pos - start)
     end |> esc
+end
+
+macro endheadertoken()
+    quote
+        push!(tokens, token)
+        quoted = false
+        qstring = false
+    end |> esc
+end
+
+function scanheader(mem::Memory, pos::Int, delim::UInt8, quot::UInt8, trim::Bool)
+    tokens = Token[]
+    token = TOKEN_NULL
+    quoted = false
+    qstring = false
+    start = 0
+    pos_end = pos + length(mem)
+
+    @state BEGIN begin
+        @begintoken
+        if c == quot
+            if quoted
+                @recordtoken STRING
+                @goto QUOTE_END
+            end
+            quoted = true
+            @goto BEGIN
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken MISSING
+            @endheadertoken
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            if trim && !quoted
+                @goto BEGIN
+            end
+            @goto STRING
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @endheadertoken
+            @goto END
+        elseif c == UInt8('\r')
+            @endheadertoken
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state STRING begin
+        if quoted && c == quot
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
+            @endheadertoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8(' ')
+            if trim && !quoted
+                if qstring
+                    @recordtoken QSTRING
+                else
+                    @recordtoken STRING
+                end
+                @goto STRING_SPACE
+            end
+            @goto STRING
+        elseif c == UInt8('\n')
+            if qstring
+                @recordtoken QSTRING
+            else
+                @recordtoken STRING
+            end
+            @recordtoken STRING
+            @endheadertoken
+            @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endheadertoken
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state STRING_SPACE begin
+        if c == UInt8(' ')
+            @goto STRING_SPACE
+        elseif c == delim
+            @endheadertoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @endheadertoken
+            @goto END
+        elseif c == UInt8('\r')
+            @endheadertoken
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state QUOTE_END begin
+        if c == delim
+            @endheadertoken
+            @goto BEGIN
+        elseif c == quot
+            qstring = true
+            @goto STRING
+        elseif c == UInt8(' ')
+            if trim
+                @goto QUOTE_END_SPACE
+            end
+            @goto ERROR
+        elseif c == UInt8('\n')
+            @endheadertoken
+            @goto END
+        elseif c == UInt8('\r')
+            @endheadertoken
+            @goto CR
+        else
+            @goto ERROR
+        end
+    end
+
+    @state QUOTE_END_SPACE begin
+        if c == delim
+            @endheadertoken
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            @goto QUOTE_END_SPACE
+        elseif c == UInt8('\n')
+            @endheadertoken
+            @goto END
+        elseif c == UInt8('\r')
+            @endheadertoken
+            @goto CR
+        else
+            @goto ERROR
+        end
+    end
+
+    @state CR begin
+        if c == UInt8('\n')
+            @goto END
+        else
+            @goto ERROR
+        end
+    end
+
+    @label ERROR
+    throw(ReadError("invalid file header format"))
+
+    @label END
+    return pos, tokens
 end
 
 macro endtoken()
@@ -1009,7 +1187,6 @@ function scanline!(
             else
                 @recordtoken STRING
             end
-            @recordtoken STRING
             @endtoken
             @goto END
         elseif c == UInt8('\r')
