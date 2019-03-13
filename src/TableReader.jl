@@ -161,14 +161,16 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     if ncols == 0
         return DataFrame()
     end
-    tokens = Array{Token}(undef, (ncols, MAX_BUFFERED_ROWS))
+    buffer = stream.state.buffer1
+    nrows_estimated = countlines(buffermem(buffer))
+    n_chunk_rows = nrows_estimated
+    tokens = Array{Token}(undef, (ncols, n_chunk_rows))
     #fill!(tokens, Token(0x00, 0, 0))
-    n_chunk_rows = size(tokens, 2)
     columns = Vector[]
     line = 2
     while !eof(stream)
         fillbuffer(stream, eager = true)
-        mem = buffermem(stream.state.buffer1)
+        mem = buffermem(buffer)
         lastnl = find_last_newline(mem)
         @assert lastnl > 0  # TODO
         pos = 0
@@ -249,6 +251,15 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
         end
     end
     return DataFrame(columns, colnames)
+end
+
+# Count the number of lines in a memory block.
+function countlines(mem::Memory)
+    n = 0
+    @inbounds @simd for i in 1:length(mem)
+        n += mem[i] == UInt8('\n')
+    end
+    return n
 end
 
 # token kind
