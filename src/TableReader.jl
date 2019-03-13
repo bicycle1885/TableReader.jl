@@ -395,14 +395,16 @@ end
 end
 
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
+    last = ""
     @inbounds for i in 1:nvals
         t = tokens[c,i]
         start, length = location(t)
-        if kind(t) & QSTRING != 0
-            col[end-nvals+i] = qstring(mem, start, length, quot)
+        if length == sizeof(last) && ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), mem.ptr + start - 1, pointer(last), length) == 0
+            # pass
         else
-            col[end-nvals+i] = unsafe_string(mem.ptr + start - 1, length)
+            last = kind(t) & QSTRING != 0 ? qstring(mem, start, length, quot) : unsafe_string(mem.ptr + start - 1, length)
         end
+        col[end-nvals+i] = last
     end
     return col
 end
