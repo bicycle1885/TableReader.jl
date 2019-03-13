@@ -302,6 +302,13 @@ using Test
         @test df[:col3] == ["baz", "piyo"]
     end
 
+    @testset "CR" begin
+        data = """col1\tcol2\r123\t456\r"""
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [123]
+        @test df[:col2] == [456]
+    end
+
     @testset "invalid argument" begin
         @test_throws ArgumentError readtsv(IOBuffer(""), chunksize = -1)
     end

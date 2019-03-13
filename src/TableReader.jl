@@ -177,6 +177,9 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     end
     buffer = stream.state.buffer1
     nrows_estimated = countlines(buffermem(buffer))
+    if nrows_estimated == 0
+        nrows_estimated = countlines(buffermem(buffer), byte = CR)
+    end
     n_chunk_rows = nrows_estimated
     tokens = Array{Token}(undef, (ncols, n_chunk_rows))
     #fill!(tokens, Token(0x00, 0, 0))
@@ -252,10 +255,10 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
 end
 
 # Count the number of lines in a memory block.
-function countlines(mem::Memory)
+function countlines(mem::Memory; byte::UInt8 = LF)
     n = 0
     @inbounds @simd for i in 1:length(mem)
-        n += mem[i] == LF
+        n += mem[i] == byte
     end
     return n
 end
@@ -310,19 +313,6 @@ function aggregate_columns(tokens::Matrix{Token}, nrows::Int)
         bitmaps[i] = ((x | y) & 0b1000) | ((x & y) & 0b0111)
     end
     return bitmaps
-end
-
-function find_last_newline(mem::Memory)
-    i = lastindex(mem)
-    #while i > firstindex(mem)
-    while i > 0
-        @inbounds x = mem[i]
-        if x == LF
-            break
-        end
-        i -= 1
-    end
-    return i
 end
 
 function fillcolumn!(col::Vector{Int}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
@@ -501,6 +491,18 @@ function find_first_newline(mem::Memory, i::Int)
     return i
 end
 
+function find_last_newline(mem::Memory)
+    i = lastindex(mem)
+    while i > 0
+        @inbounds x = mem[i]
+        if x == LF || x == CR
+            break
+        end
+        i -= 1
+    end
+    return i
+end
+
 
 # Line parser
 # -----------
@@ -517,9 +519,9 @@ macro state(name, ex)
         #println($(QuoteNode(name)))
         #@show quoted
         pos += 1
-        if pos > pos_end
-            @goto END
-        end
+        #if pos > pos_end
+        #    @goto END
+        #end
         @inbounds c = mem[pos]
         #@show Char(c)
         #println()
@@ -734,16 +736,13 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
         end
     end
 
-    @state CR begin
-        if c == LF
-            @goto END
-        else
-            @goto ERROR
-        end
-    end
-
     @label ERROR
     throw(ReadError("invalid file header format"))
+
+    @label CR
+    if pos + 1 ≤ pos_end && mem[pos + 1] == LF
+        pos += 1
+    end
 
     @label END
     return pos, tokens
@@ -1288,16 +1287,13 @@ function scanline!(
         end
     end
 
-    @state CR begin
-        if c == LF
-            @goto END
-        else
-            @goto ERROR
-        end
-    end
-
     @label ERROR
     throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
+
+    @label CR
+    if pos + 1 ≤ pos_end && mem[pos + 1] == LF
+        pos += 1
+    end
 
     @label END
     if i ≤ ncols
