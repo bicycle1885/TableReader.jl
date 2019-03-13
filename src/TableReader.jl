@@ -1302,6 +1302,7 @@ function scanline!(
     return pos
 end
 
+precompile(Tuple{typeof(scanheader), Memory, Int, Int, UInt8, UInt8, Bool})
 precompile(Tuple{typeof(scanline!), Matrix{Token}, Int, Memory, Int, Int, Int, UInt8, UInt8, Bool})
 
 end # module
