@@ -5,6 +5,10 @@
 
 TableReader.jl does not waste your time.
 
+- Carefully optimized for speed.
+- Transparently decompresses gzip, xz, and zstd data.
+- Read data from a local file, a remote file, or a running process.
+
 
 ## Installation
 
@@ -18,12 +22,23 @@ So, check out the master branch of it and install TableReader.jl as follows:
 ## Usage
 
 ```julia
-# This takes the three functions into the current scope: readdlm, readcsv, and readtsv.
+# This takes the three functions into the current scope:
+#   - readdlm
+#   - readcsv
+#   - readtsv
 using TableReader
 
-
-# Read a CSV file.
+# Read a CSV file and return a DataFrame object.
 dataframe = readcsv("somefile.csv")
+
+# Read gzip/xz/zstd compressed files.
+dataframe = readcsv("somefile.csv.gz")
+
+# Read a remote file as downloading.
+dataframe = readcsv("https://example.com/somefile.csv")
+
+# Read stdout from a process.
+dataframe = readcsv(`unzip -p data.zip somefile.csv`)
 ```
 
 [transcodingstreams-url]: https://github.com/bicycle1885/TranscodingStreams.jl
