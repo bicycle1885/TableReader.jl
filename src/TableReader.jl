@@ -188,57 +188,46 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
             end
         end
         n_new_records = line - chunk_begin
+        bitmaps = aggregate_columns(tokens, n_new_records)
         if isempty(columns)
-            resize!(columns, ncols)
             # infer data types of columns
+            resize!(columns, ncols)
             for i in 1:ncols
-                parsable = 0b0111
-                hasmissing = false
-                @inbounds for j in 1:n_new_records
-                    x = kind(tokens[i,j])
-                    parsable &= x
-                    hasmissing |= (x & 0b1000) != 0
+                parsable = bitmaps[i] & 0b0111
+                hasmissing = (bitmaps[i] & 0b1000) != 0
+                T = (parsable & INTEGER) != 0 ? Int :
+                    (parsable & FLOAT) != 0 ? Float64 : String
+                if hasmissing
+                    T = Union{T,Missing}
                 end
-                if (parsable & INTEGER) != 0
-                    columns[i] = hasmissing ? Union{Int,Missing}[] : Int[]
-                elseif (parsable & FLOAT) != 0
-                    columns[i] = hasmissing ? Union{Float64,Missing}[] : Float64[]
-                else
-                    # fall back to string
-                    columns[i] = hasmissing ? Union{String,Missing}[] : String[]
-                end
+                col = Vector{T}(undef, n_new_records)
+                fillcolumn!(col, n_new_records, mem, tokens, i, quot)
+                columns[i] = col
             end
         else
+            # check existing columns
             for i in 1:ncols
-                parsable = 0b0111
-                hasmissing = false
-                @inbounds for j in 1:n_new_records
-                    x = kind(tokens[i,j])
-                    parsable &= x
-                    hasmissing |= (x & 0b1000) != 0
-                end
+                parsable = bitmaps[i] & 0b0111
+                hasmissing = (bitmaps[i] & 0b1000) != 0
                 col = columns[i]
-                if col isa Vector{Int} || col isa Vector{Union{Int,Missing}}
+                T = eltype(col)
+                if T <: Union{Int,Missing}
                     (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i)"))
-                elseif col isa Vector{Float64} || col isa Vector{Union{Float64,Missing}}
+                elseif T <: Union{Float64,Missing}
                     (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i)"))
                 else
-                    @assert col isa Vector{String} || col isa Vector{Union{String,Missing}}
+                    @assert T <: Union{String,Missing}
                 end
-                # allow missing if any
-                if col isa Vector{Int} && hasmissing
-                    columns[i] = copyto!(Vector{Union{Int,Missing}}(undef, length(col)), col)
-                elseif col isa Vector{Float64} && hasmissing
-                    columns[i] = copyto!(Vector{Union{Float64,Missing}}(undef, length(col)), col)
-                elseif col isa Vector{String} && hasmissing
-                    columns[i] = copyto!(Vector{Union{String,Missing}}(undef, length(col)), col)
+                if hasmissing && !(T >: Union{T,Missing})
+                    # copy data to a new column
+                    col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_records), 1, col, 1, length(col))
+                else
+                    # resize the column for new records
+                    resize!(col, length(col) + n_new_records)
                 end
+                fillcolumn!(col, n_new_records, mem, tokens, i, quot)
+                columns[i] = col
             end
-        end
-        for i in 1:ncols
-            col = columns[i]
-            resize!(col, length(col) + n_new_records)
-            fillcolumn!(col, n_new_records, mem, tokens, i, quot)
         end
         skip(stream, pos)
         if !chunking
@@ -294,6 +283,19 @@ end
 function location(token::Token)
     x = token.value & (~UInt64(0) >> 4)
     return (x >> 24) % Int, (x & (~UInt64(0) >> 40)) % Int
+end
+
+function aggregate_columns(tokens::Matrix{Token}, nrows::Int)
+    ncols = size(tokens, 1)
+    bitmaps = Vector{UInt8}(undef, ncols)
+    fill!(bitmaps, 0b0111)
+    @inbounds for j in 1:nrows, i in 1:ncols
+        # Note that the tokens matrix is transposed.
+        x = kind(tokens[i,j])
+        y = bitmaps[i]
+        bitmaps[i] = ((x | y) & 0b1000) | ((x & y) & 0b0111)
+    end
+    return bitmaps
 end
 
 function find_last_newline(mem::Memory)
