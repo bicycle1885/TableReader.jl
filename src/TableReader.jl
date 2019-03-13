@@ -147,6 +147,25 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
             end
         end
 
+        function $(fname)(cmd::Base.AbstractCmd;
+                          $(delimarg),
+                          quot::Char = '"',
+                          trim::Bool = true,
+                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
+            check_parser_parameters(delim, quot, trim, chunksize)
+            return open(cmd) do proc
+                if chunksize == 0
+                    data = read(proc)
+                    buffer = Buffer(data)
+                    stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
+                else
+                    bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
+                    stream = NoopStream(proc, bufsize = bufsize)
+                end
+                return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
+            end
+        end
+
         function $(fname)(file::IO;
                           $(delimarg),
                           quot::Char = '"',
