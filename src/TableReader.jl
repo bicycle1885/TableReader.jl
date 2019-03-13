@@ -840,7 +840,7 @@ function scanline!(
                 @recordtoken MISSING
             end
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -889,7 +889,7 @@ function scanline!(
         elseif c == CR
             @recordtoken STRING
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -927,7 +927,7 @@ function scanline!(
         elseif c == CR
             @recordtoken INTEGER|FLOAT
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -946,7 +946,7 @@ function scanline!(
             @goto END
         elseif c == CR
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -980,7 +980,7 @@ function scanline!(
         elseif c == CR
             @recordtoken STRING
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1016,7 +1016,7 @@ function scanline!(
         elseif c == CR
             @recordtoken FLOAT
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1052,7 +1052,7 @@ function scanline!(
         elseif c == CR
             @recordtoken STRING
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1086,7 +1086,7 @@ function scanline!(
         elseif c == CR
             @recordtoken STRING
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1120,7 +1120,7 @@ function scanline!(
         elseif c == CR
             @recordtoken FLOAT
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1152,7 +1152,7 @@ function scanline!(
         elseif c == CR
             @recordtoken FLOAT|STRING
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1171,7 +1171,7 @@ function scanline!(
             @goto END
         elseif c == CR
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1223,7 +1223,7 @@ function scanline!(
                 @recordtoken STRING
             end
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1242,7 +1242,7 @@ function scanline!(
             @goto END
         elseif c == CR
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @multibytestring
         end
@@ -1265,7 +1265,7 @@ function scanline!(
             @goto END
         elseif c == CR
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @goto ERROR
         end
@@ -1282,13 +1282,13 @@ function scanline!(
             @goto END
         elseif c == CR
             @endtoken
-            @goto CR_LF
+            @goto CR
         else
             @goto ERROR
         end
     end
 
-    @state CR_LF begin
+    @state CR begin
         if c == LF
             @goto END
         else
