@@ -517,10 +517,10 @@ macro follows(s)
     @assert s isa String && isascii(s)
     i = 0
     foldl(s, init = :(pos + $(sizeof(s)) ≤ pos_end)) do ex, c
-        hi = UInt8(uppercase(c))
+        up = UInt8(uppercase(c))
         lo = UInt8(lowercase(c))
         i += 1
-        :($(ex) && (mem[pos+$(i)] == $(hi) || mem[pos+$(i)] == $(lo)))
+        :($(ex) && (mem[pos+$(i)] == $(up) || mem[pos+$(i)] == $(lo)))
     end |> esc
 end
 
@@ -599,8 +599,19 @@ function scanline!(
         elseif c == UInt8('.')
             @goto DOT
         elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")  # case-insensitive
+            # NaN
             pos += 2  # for 'A' and 'N'
-            @goto NAN
+            @goto SPECIAL_FLOAT
+        elseif c == UInt8('I') || c == UInt8('i')
+            # Infinity
+            if @follows("NFINITY")
+                pos += 7
+                @goto SPECIAL_FLOAT
+            elseif @follows("NF")
+                pos += 2
+                @goto SPECIAL_FLOAT
+            end
+            @goto STRING
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -641,9 +652,19 @@ function scanline!(
                 @goto STRING_SPACE
             end
             @goto STRING
-        elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")  # case-insensitive
+        elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")
             pos += 2
-            @goto NAN
+            @goto SPECIAL_FLOAT
+        elseif c == UInt8('I') || c == UInt8('i')
+            # Infinity
+            if @follows("NFINITY")
+                pos += 7
+                @goto SPECIAL_FLOAT
+            elseif @follows("NF")
+                pos += 2
+                @goto SPECIAL_FLOAT
+            end
+            @goto STRING
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -890,7 +911,7 @@ function scanline!(
         end
     end
 
-    @state NAN begin
+    @state SPECIAL_FLOAT begin
         if quoted && c == quot
             @recordtoken FLOAT|STRING
             @goto QUOTE_END
