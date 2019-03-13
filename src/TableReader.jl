@@ -101,6 +101,15 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                           trim::Bool = true,
                           chunksize::Integer = DEFAULT_CHUNK_SIZE)
             check_parser_parameters(delim, quot, trim, chunksize)
+            if occursin(r"^\w+://", filename)  # URL-like filename
+                if Sys.which("curl") === nothing
+                    throw(ArgumentError("the curl command is not available"))
+                end
+                # read a remote file
+                return open(`curl --silent $(filename)`) do proc
+                    $(fname)(proc, delim = delim, quot = quot, trim = trim, chunksize = chunksize)
+                end
+            end
             return open(filename) do file
                 if chunksize == 0
                     # without chunking
