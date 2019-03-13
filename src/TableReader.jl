@@ -584,6 +584,8 @@ function scanline!(
             end
         elseif c == UInt8('.')
             @goto DOT
+        elseif c == UInt8('N') || c == UInt8('n')
+            @goto NAN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -625,6 +627,8 @@ function scanline!(
             else
                 @goto STRING
             end
+        elseif c == UInt8('N') || c == UInt8('n')
+            @goto NAN
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == UInt8('\n')
@@ -909,6 +913,109 @@ function scanline!(
             @endtoken
             @goto END
         elseif c == UInt8('\r')
+            @endtoken
+            @goto CR_LF
+        else
+            @multibytestring
+        end
+    end
+
+    @state NAN begin
+        if quoted && c == quot
+            @recordtoken STRING
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('A') || c == UInt8('a')
+            @goto NAN_NA
+        elseif c == UInt8(' ')
+            if trim && !quoted
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @endtoken
+            @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
+        else
+            @multibytestring
+        end
+    end
+
+    @state NAN_NA begin
+        if quoted && c == quot
+            @recordtoken STRING
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken STRING
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('N') || c == UInt8('n')
+            @goto NAN_NAN
+        elseif c == UInt8(' ')
+            if trim && !quoted
+                @recordtoken STRING
+                @goto STRING_SPACE
+            else
+                @goto STRING
+            end
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken STRING
+            @endtoken
+            @goto END
+        elseif c == UInt8('\r')
+            @recordtoken STRING
+            @endtoken
+            @goto CR_LF
+        else
+            @multibytestring
+        end
+    end
+
+    @state NAN_NAN begin
+        if quoted && c == quot
+            @recordtoken FLOAT|STRING
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken FLOAT|STRING
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8(' ')
+            if trim && !quoted
+                @recordtoken FLOAT|STRING
+                @goto FLOAT_SPACE
+            else
+                @goto STRING
+            end
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == UInt8('\n')
+            @recordtoken FLOAT|STRING
+            @endtoken
+            @goto END
+        elseif c == UInt8('\r')
+            @recordtoken FLOAT|STRING
             @endtoken
             @goto CR_LF
         else

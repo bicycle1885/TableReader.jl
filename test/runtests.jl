@@ -36,6 +36,22 @@ using Test
         @test df[:col2] == [1.1, 0.0, 0.123, 1e123]
         @test df[:col3] == [12.34, -9.0, 100.000, -8.2]
 
+        # tricky floats (NaN)
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3\tcol4
+        nan\tNan\tNaN\tNAN
+        -nan\t+Nan\t-NaN\t+NAN
+        """)
+        df = readtsv(buffer)
+        @test isnan(df[1,:col1])
+        @test isnan(df[2,:col1])
+        @test isnan(df[1,:col2])
+        @test isnan(df[2,:col2])
+        @test isnan(df[1,:col3])
+        @test isnan(df[2,:col3])
+        @test isnan(df[1,:col4])
+        @test isnan(df[2,:col4])
+
         # strings
         buffer = IOBuffer("""
         col1\tcol2\tcol3
