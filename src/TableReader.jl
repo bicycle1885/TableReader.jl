@@ -489,17 +489,17 @@ macro multibytestring()
     quote
         # multibyte UTF8 character
         if 0b110_00000 ≤ c ≤ 0b110_11111
-            if pos + 1 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111)
+            if pos + 1 ≤ pos_end && (mem[pos+1] >> 6) ≤ 0b10  # same as: 0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111
                 pos += 1
                 @goto STRING
             end
         elseif 0b1110_0000 ≤ c ≤ 0b1110_1111
-            if pos + 2 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+2] ≤ 0b10_111111)
+            if pos + 2 ≤ pos_end && (max(mem[pos+1], mem[pos+2]) >> 6) ≤ 0b10
                 pos += 2
                 @goto STRING
             end
         elseif 0b11110_000 ≤ c ≤ 0b11110_111
-            if pos + 3 ≤ pos_end && (0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+2] ≤ 0b10_111111) && (0b10_000000 ≤ mem[pos+3] ≤ 0b10_111111)
+            if pos + 3 ≤ pos_end && (max(mem[pos+1], mem[pos+2], mem[pos+3]) >> 6) ≤ 0b10
                 pos += 3
                 @goto STRING
             end
