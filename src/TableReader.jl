@@ -397,14 +397,7 @@ end
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     last = ""
     @inbounds for i in 1:nvals
-        t = tokens[c,i]
-        start, length = location(t)
-        if length == sizeof(last) && ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), mem.ptr + start - 1, pointer(last), length) == 0
-            # pass
-        else
-            last = kind(t) & QSTRING != 0 ? qstring(mem, start, length, quot) : unsafe_string(mem.ptr + start - 1, length)
-        end
-        col[end-nvals+i] = last
+        col[end-nvals+i] = last = try_reuse_string(last, mem, tokens[c,i], quot)
     end
     return col
 end
@@ -416,16 +409,21 @@ function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory
         if ismissing(t)
             col[end-nvals+i] = missing
         else
-            start, length = location(tokens[c,i])
-            if length == sizeof(last) && ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), mem.ptr + start - 1, pointer(last), length) == 0
-                # pass
-            else
-                last = kind(t) & QSTRING != 0 ? qstring(mem, start, length, quot) : unsafe_string(mem.ptr + start - 1, length)
-            end
-            col[end-nvals+i] = last
+            col[end-nvals+i] = last = try_reuse_string(last, mem, t, quot)
         end
     end
     return col
+end
+
+@inline function try_reuse_string(last::String, mem::Memory, token::Token, quot::UInt8)
+    start, length = location(token)
+    if kind(token) & QSTRING != 0
+        return qstring(mem, start, length, quot)
+    elseif length == sizeof(last) && ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), mem.ptr + start - 1, pointer(last), length) == 0
+        return last
+    else
+        return unsafe_string(mem.ptr + start - 1, length)
+    end
 end
 
 function qstring(mem::Memory, start::Int, length::Int, quot::UInt8)
