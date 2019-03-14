@@ -93,17 +93,20 @@ This function is the same as [`readdlm`](@ref) but with `delim = ','`.
 function readcsv end
 
 for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
+    # prepare keyword arguments
+    kwargs = Expr[]
     if delim === nothing
-        delimarg = :(delim::Char)
+        push!(kwargs, :(delim::Char))
     else
-        delimarg = Expr(:kw, :(delim::Char), delim)
+        push!(kwargs, Expr(:kw, :(delim::Char), delim))
     end
+    push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
+    push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
+    push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
+
+    # generate methods
     @eval begin
-        function $(fname)(filename::AbstractString;
-                          $(delimarg),
-                          quot::Char = '"',
-                          trim::Bool = true,
-                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
+        function $(fname)(filename::AbstractString; $(kwargs...))
             check_parser_parameters(delim, quot, trim, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
@@ -147,11 +150,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
             end
         end
 
-        function $(fname)(cmd::Base.AbstractCmd;
-                          $(delimarg),
-                          quot::Char = '"',
-                          trim::Bool = true,
-                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
+        function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
             check_parser_parameters(delim, quot, trim, chunksize)
             return open(cmd) do proc
                 if chunksize == 0
@@ -166,11 +165,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
             end
         end
 
-        function $(fname)(file::IO;
-                          $(delimarg),
-                          quot::Char = '"',
-                          trim::Bool = true,
-                          chunksize::Integer = DEFAULT_CHUNK_SIZE)
+        function $(fname)(file::IO; $(kwargs...))
             check_parser_parameters(delim, quot, trim, chunksize)
             if chunksize == 0
                 buffer = Buffer(read(file))
