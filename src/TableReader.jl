@@ -47,6 +47,9 @@ If `trim` is true, `delim` and `quot` cannot be a space character.
 column names are read from the first line of the text file. Any iterable object
 is allowed.
 
+If unnamed columns are found in the header, they are renamed to `UNNAMED_{j}`
+for ease of access, where `{j}` is replaced by the column number.
+
 A text file will be read chunk by chunk to save memory. The chunk size is
 specified by the `chunksize` parameter, which is set to 1 MiB by default.
 The data type of each column is guessed from the values in the first chunk.
@@ -220,6 +223,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         colnames = readheader(stream, delim, quot, trim)
     else
         colnames = params.colnames
+    end
+    if any(name -> name === Symbol(""), colnames)
+        rename_unnamed_columns!(colnames)
     end
     ncols = length(colnames)
     if ncols == 0
@@ -527,6 +533,16 @@ function readheader(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::
             name = unsafe_string(mem.ptr + start - 1, length)
         end
         push!(colnames, Symbol(name))
+    end
+    return colnames
+end
+
+function rename_unnamed_columns!(colnames::Vector{Symbol})
+    for i in 1:length(colnames)
+        name = colnames[i]
+        if name == Symbol("")
+            colnames[i] = Symbol("UNNAMED_$(i)")
+        end
     end
     return colnames
 end
@@ -1383,10 +1399,7 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
     precompile(Tuple{typeof(TableReader.readheader), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.readcsv), String})
-    precompile(Tuple{getfield(TableReader, Symbol("##countlines#28")), UInt8, typeof(identity), TranscodingStreams.Memory})
     precompile(Tuple{typeof(TableReader.readtsv), String})
-    precompile(Tuple{getfield(TableReader, Symbol("##readcsv#19")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
-    precompile(Tuple{getfield(TableReader, Symbol("##readtsv#10")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
 end
 _precompile_()
 

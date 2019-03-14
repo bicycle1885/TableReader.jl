@@ -458,6 +458,18 @@ end
         @test df[:col2] == [2]
     end
 
+    @testset "unnamed column" begin
+        data = """
+        col1,,col3,
+        1,foo,3,bar
+        """
+        df = readcsv(IOBuffer(data))
+        @test df[:col1] == [1]
+        @test df[:UNNAMED_2] == ["foo"]
+        @test df[:col3] == [3]
+        @test df[:UNNAMED_4] == ["bar"]
+    end
+
     @testset "from file" begin
         df = readcsv(joinpath(@__DIR__, "test.csv"))
         @test df[:col1] == [1, 2]
