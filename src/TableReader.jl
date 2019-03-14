@@ -94,20 +94,20 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                     throw(ArgumentError("the curl command is not available"))
                 end
                 # read a remote file
-                source = `curl --silent $(filename)`
-            else
-                # read a locacl file
-                source = filename
+                return $(fname)(`curl --silent $(filename)`,
+                                delim = delim, quot = quot, trim = trim,
+                                header = header, chunksize = chunksize)
             end
-            return open(source) do file
+            return open(filename) do file
+                format = checkformat(file)
                 if chunksize == 0
                     # without chunking
                     bufsize = DEFAULT_CHUNK_SIZE
-                    if endswith(filename, ".gz")
+                    if format == :gzip
                         data = read(GzipDecompressorStream(file, bufsize = bufsize))
-                    elseif endswith(filename, ".zst")
+                    elseif format == :zstd
                         data = read(ZstdDecompressorStream(file, bufsize = bufsize))
-                    elseif endswith(filename, ".xz")
+                    elseif format == :xz
                         data = read(XzDecompressorStream(file, bufsize = bufsize))
                     else
                         data = read(file)
@@ -117,11 +117,11 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                 else
                     # with chunking
                     bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                    if endswith(filename, ".gz")
+                    if format == :gzip
                         stream = GzipDecompressorStream(file, bufsize = bufsize)
-                    elseif endswith(filename, ".zst")
+                    elseif format == :zstd
                         stream = ZstdDecompressorStream(file, bufsize = bufsize)
-                    elseif endswith(filename, ".xz")
+                    elseif format == :xz
                         stream = XzDecompressorStream(file, bufsize = bufsize)
                     else
                         stream = NoopStream(file, bufsize = bufsize)
@@ -134,13 +134,33 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
             params = check_parser_parameters(delim, quot, trim, header, chunksize)
             return open(cmd) do proc
+                format = checkformat(proc)
                 if chunksize == 0
-                    data = read(proc)
+                    # without chunking
+                    bufsize = DEFAULT_CHUNK_SIZE
+                    if format == :gzip
+                        data = read(GzipDecompressorStream(proc, bufsize = bufsize))
+                    elseif format == :zstd
+                        data = read(ZstdDecompressorStream(proc, bufsize = bufsize))
+                    elseif format == :xz
+                        data = read(XzDecompressorStream(proc, bufsize = bufsize))
+                    else
+                        data = read(proc)
+                    end
                     buffer = Buffer(data)
                     stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
                 else
+                    # with chunking
                     bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                    stream = NoopStream(proc, bufsize = bufsize)
+                    if format == :gzip
+                        stream = GzipDecompressorStream(proc, bufsize = bufsize)
+                    elseif format == :zstd
+                        stream = ZstdDecompressorStream(proc, bufsize = bufsize)
+                    elseif format == :xz
+                        stream = XzDecompressorStream(proc, bufsize = bufsize)
+                    else
+                        stream = NoopStream(proc, bufsize = bufsize)
+                    end
                 end
                 return readdlm_internal(stream, params)
             end
@@ -148,19 +168,58 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
 
         function $(fname)(file::IO; $(kwargs...))
             params = check_parser_parameters(delim, quot, trim, header, chunksize)
+            if !(file isa TranscodingStream)
+                file = NoopStream(file)
+            end
+            format = checkformat(file)
             if chunksize == 0
-                buffer = Buffer(read(file))
+                # without chunking
+                bufsize = DEFAULT_CHUNK_SIZE
+                if format == :gzip
+                    data = read(GzipDecompressorStream(file, bufsize = bufsize))
+                elseif format == :zstd
+                    data = read(ZstdDecompressorStream(file, bufsize = bufsize))
+                elseif format == :xz
+                    data = read(XzDecompressorStream(file, bufsize = bufsize))
+                else
+                    data = read(file)
+                end
+                buffer = Buffer(data)
                 stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
             else
+                # with chunking
                 bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                if file isa TranscodingStream
-                    stream = file
+                if format == :gzip
+                    stream = GzipDecompressorStream(file, bufsize = bufsize)
+                elseif format == :zstd
+                    stream = ZstdDecompressorStream(file, bufsize = bufsize)
+                elseif format == :xz
+                    stream = XzDecompressorStream(file, bufsize = bufsize)
                 else
                     stream = NoopStream(file, bufsize = bufsize)
                 end
             end
             return readdlm_internal(stream, params)
         end
+    end
+end
+
+# Check the file format of a stream.
+function checkformat(stream::IO)
+    mark(stream)
+    magic = zeros(UInt8, 6)
+    nb = readbytes!(stream, magic, 6)
+    reset(stream)
+    if nb != 6
+        return :unknown
+    elseif magic[1:6] == b"\xFD\x37\x7A\x58\x5A\x00"
+        return :xz
+    elseif magic[1:2] == b"\x1f\x8b"
+        return :gzip
+    elseif magic[1:4] == b"\x28\xb5\x2f\xfd"
+        return :zstd
+    else
+        return :unknown
     end
 end
 

@@ -449,16 +449,6 @@ end
         @test df[2,:col2] == 2
     end
 
-    @testset "from command" begin
-        if Sys.which("echo") === nothing
-            @info "skip tests: echo command is not found"
-        else
-            df = readcsv(`echo $("col1,col2\n1,2")`)
-            @test df[:col1] == [1]
-            @test df[:col2] == [2]
-        end
-    end
-
     @testset "from file" begin
         df = readcsv(joinpath(@__DIR__, "test.csv"))
         @test df[:col1] == [1, 2]
@@ -479,5 +469,25 @@ end
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
+    end
+
+    @testset "from command" begin
+        if Sys.which("echo") === nothing
+            @info "skip tests: echo command is not found"
+        else
+            df = readcsv(`echo $("col1,col2\n1,2")`)
+            @test df[:col1] == [1]
+            @test df[:col2] == [2]
+        end
+
+        if Sys.which("cat") === nothing || Sys.which("gzip") === nothing
+            @info "skip tests: cat/gzip commands are not found"
+        else
+            testfile = joinpath(@__DIR__, "test.csv")
+            df = readcsv(pipeline(`cat $(testfile)`, `gzip`))
+            @test df[:col1] == [1, 2]
+            @test df[:col2] == [1.0, 2.0]
+            @test df[:col3] == ["one", "two"]
+        end
     end
 end
