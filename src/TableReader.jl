@@ -1321,14 +1321,22 @@ function scanline!(
     return pos
 end
 
-precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, UInt8, UInt8, Bool})
-precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
-precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
-precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
-precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool, Bool})
-precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
-precompile(Tuple{typeof(TableReader.aggregate_columns), Array{TableReader.Token, 2}, Int64})
-precompile(Tuple{typeof(TableReader.readheader), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool})
-precompile(Tuple{typeof(TableReader.readtsv), String})
+# Generated from tools/snoop.jl.
+function _precompile_()
+    ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
+    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, UInt8, UInt8, Bool})
+    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
+    precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
+    precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool, Bool})
+    precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.fillcolumn!), Array{String, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.aggregate_columns), Array{TableReader.Token, 2}, Int64})
+    precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Float64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.readheader), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool})
+    precompile(Tuple{typeof(TableReader.readcsv), String})
+    precompile(Tuple{typeof(TableReader.readtsv), String})
+end
+_precompile_()
 
 end # module
