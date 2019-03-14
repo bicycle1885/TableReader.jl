@@ -62,7 +62,7 @@ Here is a quick benchmarking result:
 ## Installation
 
 This package depends on the latest version of
-[TranscodingStreams.jl](transcodingstreams-url) (v0.9.2 or newer).  Please
+[TranscodingStreams.jl](https://github.com/bicycle1885/TranscodingStreams.jl) (v0.9.2 or newer).  Please
 update it if it is older than required, and then add this package as follows:
 
     pkg> add https://github.com/bicycle1885/TableReader.jl
