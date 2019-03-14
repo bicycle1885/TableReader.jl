@@ -93,133 +93,22 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
                 end
-                # read a remote file
-                return $(fname)(`curl --silent $(filename)`,
-                                delim = delim, quot = quot, trim = trim,
-                                header = header, chunksize = chunksize)
+                # read a remote file using curl
+                return open(proc -> readdlm_internal(wrapstream(proc, params), params), `curl --silent $(filename)`)
             end
-            return open(filename) do file
-                format = checkformat(file)
-                if chunksize == 0
-                    # without chunking
-                    bufsize = DEFAULT_CHUNK_SIZE
-                    if format == :gzip
-                        data = read(GzipDecompressorStream(file, bufsize = bufsize))
-                    elseif format == :zstd
-                        data = read(ZstdDecompressorStream(file, bufsize = bufsize))
-                    elseif format == :xz
-                        data = read(XzDecompressorStream(file, bufsize = bufsize))
-                    else
-                        data = read(file)
-                    end
-                    buffer = Buffer(data)
-                    stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
-                else
-                    # with chunking
-                    bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                    if format == :gzip
-                        stream = GzipDecompressorStream(file, bufsize = bufsize)
-                    elseif format == :zstd
-                        stream = ZstdDecompressorStream(file, bufsize = bufsize)
-                    elseif format == :xz
-                        stream = XzDecompressorStream(file, bufsize = bufsize)
-                    else
-                        stream = NoopStream(file, bufsize = bufsize)
-                    end
-                end
-                return readdlm_internal(stream, params)
-            end
+            # read a local file
+            return open(file -> readdlm_internal(wrapstream(file, params), params), filename)
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
             params = check_parser_parameters(delim, quot, trim, header, chunksize)
-            return open(cmd) do proc
-                format = checkformat(proc)
-                if chunksize == 0
-                    # without chunking
-                    bufsize = DEFAULT_CHUNK_SIZE
-                    if format == :gzip
-                        data = read(GzipDecompressorStream(proc, bufsize = bufsize))
-                    elseif format == :zstd
-                        data = read(ZstdDecompressorStream(proc, bufsize = bufsize))
-                    elseif format == :xz
-                        data = read(XzDecompressorStream(proc, bufsize = bufsize))
-                    else
-                        data = read(proc)
-                    end
-                    buffer = Buffer(data)
-                    stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
-                else
-                    # with chunking
-                    bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                    if format == :gzip
-                        stream = GzipDecompressorStream(proc, bufsize = bufsize)
-                    elseif format == :zstd
-                        stream = ZstdDecompressorStream(proc, bufsize = bufsize)
-                    elseif format == :xz
-                        stream = XzDecompressorStream(proc, bufsize = bufsize)
-                    else
-                        stream = NoopStream(proc, bufsize = bufsize)
-                    end
-                end
-                return readdlm_internal(stream, params)
-            end
+            return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
             params = check_parser_parameters(delim, quot, trim, header, chunksize)
-            if !(file isa TranscodingStream)
-                file = NoopStream(file)
-            end
-            format = checkformat(file)
-            if chunksize == 0
-                # without chunking
-                bufsize = DEFAULT_CHUNK_SIZE
-                if format == :gzip
-                    data = read(GzipDecompressorStream(file, bufsize = bufsize))
-                elseif format == :zstd
-                    data = read(ZstdDecompressorStream(file, bufsize = bufsize))
-                elseif format == :xz
-                    data = read(XzDecompressorStream(file, bufsize = bufsize))
-                else
-                    data = read(file)
-                end
-                buffer = Buffer(data)
-                stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
-            else
-                # with chunking
-                bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
-                if format == :gzip
-                    stream = GzipDecompressorStream(file, bufsize = bufsize)
-                elseif format == :zstd
-                    stream = ZstdDecompressorStream(file, bufsize = bufsize)
-                elseif format == :xz
-                    stream = XzDecompressorStream(file, bufsize = bufsize)
-                else
-                    stream = NoopStream(file, bufsize = bufsize)
-                end
-            end
-            return readdlm_internal(stream, params)
+            return readdlm_internal(wrapstream(file, params), params)
         end
-    end
-end
-
-# Check the file format of a stream.
-function checkformat(stream::IO)
-    mark(stream)
-    magic = zeros(UInt8, 6)
-    nb = readbytes!(stream, magic, 6)
-    reset(stream)
-    if nb != 6
-        return :unknown
-    elseif magic[1:6] == b"\xFD\x37\x7A\x58\x5A\x00"
-        return :xz
-    elseif magic[1:2] == b"\x1f\x8b"
-        return :gzip
-    elseif magic[1:4] == b"\x28\xb5\x2f\xfd"
-        return :zstd
-    else
-        return :unknown
     end
 end
 
@@ -268,6 +157,60 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::An
         colnames,
         chunksize,
     )
+end
+
+# Wrap a stream by TranscodingStream.
+function wrapstream(stream::IO, params::ParserParameters)
+    bufsize = max(params.chunksize, MINIMUM_CHUNK_SIZE)
+    if !applicable(mark, stream) || !applicable(reset, stream)
+        stream = NoopStream(stream, bufsize = bufsize)
+    end
+    format = checkformat(stream)
+    if params.chunksize != 0
+        # with chunking
+        if format == :gzip
+            return GzipDecompressorStream(stream, bufsize = bufsize)
+        elseif format == :zstd
+            return ZstdDecompressorStream(stream, bufsize = bufsize)
+        elseif format == :xz
+            return XzDecompressorStream(stream, bufsize = bufsize)
+        elseif stream isa TranscodingStream
+            return stream
+        else
+            return NoopStream(stream, bufsize = bufsize)
+        end
+    end
+    # without chunking
+    if format == :gzip
+        data = read(GzipDecompressorStream(stream))
+    elseif format == :zstd
+        data = read(ZstdDecompressorStream(stream))
+    elseif format == :xz
+        data = read(XzDecompressorStream(stream))
+    else
+        data = read(stream)
+    end
+    buffer = Buffer(data)
+    return TranscodingStream(Noop(), devnull, State(buffer, buffer))
+end
+
+# Check the file format of a stream.
+function checkformat(stream::IO)
+    mark(stream)
+    magic = zeros(UInt8, 6)
+    nb = readbytes!(stream, magic, 6)
+    reset(stream)
+    if nb != 6
+        return :unknown
+    elseif magic[1:6] == b"\xFD\x37\x7A\x58\x5A\x00"
+        return :xz
+    elseif magic[1:2] == b"\x1f\x8b"
+        return :gzip
+    elseif magic[1:4] == b"\x28\xb5\x2f\xfd"
+        return :zstd
+    else
+        return :unknown
+    end
 end
 
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
@@ -1415,20 +1358,26 @@ function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
     precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
+    precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
     precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
     precompile(Tuple{typeof(TableReader.check_parser_parameters), Char, Char, Bool, Nothing, Int64})
+    precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.fillcolumn!), Array{String, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.aggregate_columns), Array{TableReader.Token, 2}, Int64})
-    precompile(Tuple{typeof(TableReader.fillcolumn!), Array{String, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.Process}})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Float64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
     precompile(Tuple{typeof(TableReader.readheader), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.readcsv), String})
-    precompile(Tuple{getfield(TableReader, Symbol("##countlines#22")), UInt8, typeof(identity), TranscodingStreams.Memory})
-    precompile(Tuple{getfield(TableReader, Symbol("##readtsv#8")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
+    precompile(Tuple{getfield(TableReader, Symbol("##countlines#28")), UInt8, typeof(identity), TranscodingStreams.Memory})
     precompile(Tuple{typeof(TableReader.readtsv), String})
-    precompile(Tuple{getfield(TableReader, Symbol("##readcsv#15")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
+    precompile(Tuple{getfield(TableReader, Symbol("##readcsv#19")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
+    precompile(Tuple{getfield(TableReader, Symbol("##readtsv#10")), Char, Char, Bool, Nothing, Int64, typeof(identity), String})
 end
 _precompile_()
 
