@@ -449,6 +449,15 @@ end
         @test df[2,:col2] == 2
     end
 
+    @testset "EOF without newline" begin
+        data = """
+        col1,col2
+        1,2"""
+        df = readcsv(IOBuffer(data))
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+    end
+
     @testset "from file" begin
         df = readcsv(joinpath(@__DIR__, "test.csv"))
         @test df[:col1] == [1, 2]

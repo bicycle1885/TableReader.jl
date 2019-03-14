@@ -231,6 +231,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     if nrows_estimated == 0
         nrows_estimated = countlines(buffermem(buffer), byte = CR)
     end
+    nrows_estimated += 1  # maybe insert a newline at the end
     n_chunk_rows = nrows_estimated
     tokens = Array{Token}(undef, (ncols, n_chunk_rows))
     #fill!(tokens, Token(0x00, 0, 0))
@@ -239,7 +240,15 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     while !eof(stream)
         mem = buffermem(buffer)
         lastnl = find_last_newline(mem)
-        @assert lastnl > 0  # TODO
+        if lastnl == 0 && fillbuffer(stream, eager = true) == 0
+            # reached EOF without newline marker, so insert an LF to cheat the parser
+            TranscodingStreams.makemargin!(buffer, 1)
+            TranscodingStreams.writebyte!(buffer, LF)
+            mem = buffermem(buffer)
+            lastnl = find_last_newline(mem)
+        end
+        # maybe, found a line that is too long?
+        @assert lastnl > 0
         pos = 0
         chunk_begin = line
         if chunking
