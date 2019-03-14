@@ -437,4 +437,14 @@ end
         @test ismissing(df[1,:col2])
         @test df[2,:col2] == 2
     end
+
+    @testset "from command" begin
+        if Sys.which("echo") === nothing
+            @info "skip tests: echo command is not found"
+        else
+            df = readcsv(`echo $("col1,col2\n1,2")`)
+            @test df[:col1] == [1]
+            @test df[:col2] == [2]
+        end
+    end
 end
