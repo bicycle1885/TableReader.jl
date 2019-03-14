@@ -344,24 +344,24 @@ using Test
 
     @testset "from file" begin
         df = readtsv(joinpath(@__DIR__, "test.tsv"))
-        @test df[:col1] == [1, 4]
-        @test df[:col2] == [2, 5]
-        @test df[:col3] == [3, 6]
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
 
         df = readtsv(joinpath(@__DIR__, "test.tsv.gz"))
-        @test df[:col1] == [1, 4]
-        @test df[:col2] == [2, 5]
-        @test df[:col3] == [3, 6]
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
 
         df = readtsv(joinpath(@__DIR__, "test.tsv.zst"))
-        @test df[:col1] == [1, 4]
-        @test df[:col2] == [2, 5]
-        @test df[:col3] == [3, 6]
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
 
         df = readtsv(joinpath(@__DIR__, "test.tsv.xz"))
-        @test df[:col1] == [1, 4]
-        @test df[:col2] == [2, 5]
-        @test df[:col3] == [3, 6]
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
     end
 end
 
@@ -446,5 +446,27 @@ end
             @test df[:col1] == [1]
             @test df[:col2] == [2]
         end
+    end
+
+    @testset "from file" begin
+        df = readcsv(joinpath(@__DIR__, "test.csv"))
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
+
+        df = readcsv(joinpath(@__DIR__, "test.csv.gz"))
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
+
+        df = readcsv(joinpath(@__DIR__, "test.csv.zst"))
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
+
+        df = readcsv(joinpath(@__DIR__, "test.csv.xz"))
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
     end
 end
