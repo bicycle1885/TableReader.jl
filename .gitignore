@@ -2,4 +2,8 @@
 *.jl.cov
 *.jl.mem
 .DS_Store
+/*.jl
+/*.csv
+/*.tsv
 /Manifest.toml
+/precompile
