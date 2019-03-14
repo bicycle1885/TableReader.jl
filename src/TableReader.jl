@@ -21,54 +21,8 @@ using CodecZstd:
 using CodecXz:
     XzDecompressorStream
 
-const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
 const DEFAULT_CHUNK_SIZE =  1 * 2^20  #  1 MiB
-const MAX_BUFFERED_ROWS = 1000
-
-const SP = UInt8(' ')
-const CR = UInt8('\r')
-const LF = UInt8('\n')
-
-# Printable characters
-const CHARS_PRINT = ' ':'~'
-
-# Whitelist of delimiters
-const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
-
-# A set of parser parameters.
-struct ParserParameters
-    delim::UInt8
-    quot::UInt8
-    trim::Bool
-    colnames::Union{Vector{Symbol},Nothing}
-    chunksize::Int
-end
-
-function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::Any, chunksize::Integer)
-    if delim ∉ ALLOWED_DELIMITERS
-        throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
-    elseif delim == quot
-        throw(ArgumentError("delimiter and quote cannot be the same character"))
-    elseif delim == ' ' && trim
-        throw(ArgumentError("space delimiter and space trimming are exclusive"))
-    elseif quot == ' ' && trim
-        throw(ArgumentError("space quote and space trimming are exclusive"))
-    elseif chunksize < 0
-        throw(ArgumentError("chunks size cannot be negative"))
-    end
-    if header != nothing
-        colnames = Symbol.(collect(header))
-    else
-        colnames = nothing
-    end
-    return ParserParameters(
-        UInt8(delim),
-        UInt8(quot),
-        trim,
-        colnames,
-        chunksize,
-    )
-end
+const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
 
 """
     readdlm(filename or IO object;
@@ -208,6 +162,51 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
             return readdlm_internal(stream, params)
         end
     end
+end
+
+const SP = UInt8(' ')
+const CR = UInt8('\r')
+const LF = UInt8('\n')
+
+# Printable characters
+const CHARS_PRINT = ' ':'~'
+
+# Whitelist of delimiters
+const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
+
+# A set of parser parameters.
+struct ParserParameters
+    delim::UInt8
+    quot::UInt8
+    trim::Bool
+    colnames::Union{Vector{Symbol},Nothing}
+    chunksize::Int
+end
+
+function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::Any, chunksize::Integer)
+    if delim ∉ ALLOWED_DELIMITERS
+        throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
+    elseif delim == quot
+        throw(ArgumentError("delimiter and quote cannot be the same character"))
+    elseif delim == ' ' && trim
+        throw(ArgumentError("space delimiter and space trimming are exclusive"))
+    elseif quot == ' ' && trim
+        throw(ArgumentError("space quote and space trimming are exclusive"))
+    elseif chunksize < 0
+        throw(ArgumentError("chunks size cannot be negative"))
+    end
+    if header != nothing
+        colnames = Symbol.(collect(header))
+    else
+        colnames = nothing
+    end
+    return ParserParameters(
+        UInt8(delim),
+        UInt8(quot),
+        trim,
+        colnames,
+        chunksize,
+    )
 end
 
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
