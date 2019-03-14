@@ -35,7 +35,16 @@ const CHARS_PRINT = ' ':'~'
 # Whitelist of delimiters
 const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
 
-function check_parser_parameters(delim::Char, quot::Char, trim::Bool, chunksize::Integer)
+# A set of parser parameters.
+struct ParserParameters
+    delim::UInt8
+    quot::UInt8
+    trim::Bool
+    colnames::Union{Vector{Symbol},Nothing}
+    chunksize::Int
+end
+
+function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::Any, chunksize::Integer)
     if delim ∉ ALLOWED_DELIMITERS
         throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
     elseif delim == quot
@@ -47,6 +56,18 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool, chunksize:
     elseif chunksize < 0
         throw(ArgumentError("chunks size cannot be negative"))
     end
+    if header != nothing
+        colnames = Symbol.(collect(header))
+    else
+        colnames = nothing
+    end
+    return ParserParameters(
+        UInt8(delim),
+        UInt8(quot),
+        trim,
+        colnames,
+        chunksize,
+    )
 end
 
 """
@@ -54,6 +75,7 @@ end
             delim,
             quot = '"',
             trim = true,
+            header = nothing,
             chunksize = $(DEFAULT_CHUNK_SIZE))
 
 Read a character delimited text file.
@@ -66,6 +88,10 @@ character as `delim`.
 
 `trim` specifies whether the parser trims space (0x20) characters around a field.
 If `trim` is true, `delim` and `quot` cannot be a space character.
+
+`header` specifies the column names. If `header` is `nothing` (default), the
+column names are read from the first line of the text file. Any iterable object
+is allowed.
 
 A text file will be read chunk by chunk to save memory. The chunk size is
 specified by the `chunksize` parameter, which is set to 1 MiB by default.
@@ -102,12 +128,13 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
     end
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
+    push!(kwargs, Expr(:kw, :(header), nothing))  # header = nothing
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            check_parser_parameters(delim, quot, trim, chunksize)
+            params = check_parser_parameters(delim, quot, trim, header, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -146,12 +173,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                         stream = NoopStream(file, bufsize = bufsize)
                     end
                 end
-                return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
+                return readdlm_internal(stream, params)
             end
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            check_parser_parameters(delim, quot, trim, chunksize)
+            params = check_parser_parameters(delim, quot, trim, header, chunksize)
             return open(cmd) do proc
                 if chunksize == 0
                     data = read(proc)
@@ -161,12 +188,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                     bufsize = max(chunksize, MINIMUM_CHUNK_SIZE)
                     stream = NoopStream(proc, bufsize = bufsize)
                 end
-                return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
+                return readdlm_internal(stream, params)
             end
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            check_parser_parameters(delim, quot, trim, chunksize)
+            params = check_parser_parameters(delim, quot, trim, header, chunksize)
             if chunksize == 0
                 buffer = Buffer(read(file))
                 stream = TranscodingStream(Noop(), devnull, State(buffer, buffer))
@@ -178,17 +205,24 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
                     stream = NoopStream(file, bufsize = bufsize)
                 end
             end
-            return readdlm_internal(stream, UInt8(delim), UInt8(quot), trim, chunksize != 0)
+            return readdlm_internal(stream, params)
         end
     end
 end
 
-function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool, chunking::Bool)
-    colnames = readheader(stream, delim, quot, trim)
+function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
+    delim, quot, trim = params.delim, params.quot, params.trim
+    chunking = params.chunksize != 0
+    if params.colnames === nothing
+        colnames = readheader(stream, delim, quot, trim)
+    else
+        colnames = params.colnames
+    end
     ncols = length(colnames)
     if ncols == 0
         return DataFrame()
     end
+    fillbuffer(stream, eager = true)
     buffer = stream.state.buffer1
     nrows_estimated = countlines(buffermem(buffer))
     if nrows_estimated == 0
@@ -200,7 +234,6 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
     columns = Vector[]
     line = 2
     while !eof(stream)
-        fillbuffer(stream, eager = true)
         mem = buffermem(buffer)
         lastnl = find_last_newline(mem)
         @assert lastnl > 0  # TODO
@@ -264,6 +297,7 @@ function readdlm_internal(stream::TranscodingStream, delim::UInt8, quot::UInt8, 
         if !chunking
             @assert eof(stream)
         end
+        fillbuffer(stream, eager = true)
     end
     return DataFrame(columns, colnames)
 end

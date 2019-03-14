@@ -414,6 +414,17 @@ end
         @test df[:col3] == ["c", "baz"]
     end
 
+    @testset "header" begin
+        data = """
+        1,2,3
+        4,5,6
+        """
+        df = readcsv(IOBuffer(data), header = ["col1", "col2", "col3"])
+        @test df[:col1] == [1, 4]
+        @test df[:col2] == [2, 5]
+        @test df[:col3] == [3, 6]
+    end
+
     @testset "quotation" begin
         data = """
         "col1","col2"
