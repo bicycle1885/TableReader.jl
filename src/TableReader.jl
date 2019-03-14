@@ -186,12 +186,14 @@ end
 function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::Any, chunksize::Integer)
     if delim ∉ ALLOWED_DELIMITERS
         throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
+    elseif quot ∉ ALLOWED_DELIMITERS
+        throw(ArgumentError("quotation mark $(repr(quot)) is not allowed"))
     elseif delim == quot
-        throw(ArgumentError("delimiter and quote cannot be the same character"))
+        throw(ArgumentError("delimiter and quotation mark cannot be the same character"))
     elseif delim == ' ' && trim
-        throw(ArgumentError("space delimiter and space trimming are exclusive"))
+        throw(ArgumentError("delimiting with space and space trimming are exclusive"))
     elseif quot == ' ' && trim
-        throw(ArgumentError("space quote and space trimming are exclusive"))
+        throw(ArgumentError("quoting with space and space trimming are exclusive"))
     elseif chunksize < 0
         throw(ArgumentError("chunks size cannot be negative"))
     end
