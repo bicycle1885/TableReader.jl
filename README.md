@@ -12,10 +12,10 @@ TableReader.jl does not waste your time.
 
 ## Installation
 
-This package currently depends on the master branch of [TranscodingStreams.jl](transcodingstreams-url).
-So, check out the master branch of it and install TableReader.jl as follows:
+This package depends on the latest version of
+[TranscodingStreams.jl](transcodingstreams-url) (v0.9.2 or newer).  Please
+update it if it is older than required, and then add this package as follows:
 
-    pkg> add TranscodingStreams#master
     pkg> add https://github.com/bicycle1885/TableReader.jl
 
 
