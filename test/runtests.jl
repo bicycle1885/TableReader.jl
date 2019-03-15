@@ -50,6 +50,18 @@ using Test
         @test df[:col2] == ["b", "bar"]
         @test df[:col3] == ["c", "baz"]
 
+        # dates
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        2015-12-21\t2019-01-01\t1999-09-11
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [Date(2015, 12, 21)]
+        @test df[:col2] == [Date(2019, 1, 1)]
+        @test df[:col3] == [Date(1999, 9, 11)]
+
         # datetimes
         buffer = IOBuffer("""
         col1\tcol2\tcol3

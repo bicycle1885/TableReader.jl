@@ -335,15 +335,66 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     end
     for i in 1:ncols
         col = columns[i]
-        if eltype(col) <: Union{String,Missing} && is_datetime_like(col)
-            try
-                columns[i] = parse_datetime(col)
-            catch
-                # not a datetime column
+        if eltype(col) <: Union{String,Missing}
+            if is_date_like(col)
+                try
+                    columns[i] = parse_date(col)
+                catch
+                    # not a date column
+                end
+            elseif is_datetime_like(col)
+                try
+                    columns[i] = parse_datetime(col)
+                catch
+                    # not a datetime column
+                end
             end
         end
     end
     return DataFrame(columns, colnames)
+end
+
+const DATE_REGEX = r"^\d{4}-\d{2}-\d{2}$"
+
+function parse_date(s::String)
+    return Date(s, dateformat"y-m-d")
+end
+
+function parse_date(col::Vector{String})
+    out = Vector{Date}(undef, length(col))
+    for i in 1:length(col)
+        out[i] = parse_date(col[i])
+    end
+    return out
+end
+
+function parse_date(col::Vector{Union{String,Missing}})
+    out = Vector{Union{String,Missing}}(undef, length(col))
+    for i in 1:length(col)
+        x = col[i]
+        if x === missing
+            out[i] = missing
+        else
+            out[i] = parse_date(x)
+        end
+    end
+    return out
+end
+
+function is_date_like(col::Vector{<:Union{String,Missing}})
+    i = 1
+    n = 0
+    while i ≤ length(col) && n < 3
+        x = col[i]
+        if x isa String
+            if !occursin(DATE_REGEX, x)
+                return false
+            end
+            n += 1
+        end
+        i += 1
+    end
+    return n > 0
 end
 
 const DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(:?\.\d+)?$"
