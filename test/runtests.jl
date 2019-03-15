@@ -1,4 +1,5 @@
 using TableReader
+using Dates
 using Test
 
 @testset "readtsv" begin
@@ -48,6 +49,18 @@ using Test
         @test df[:col1] == ["a", "foo"]
         @test df[:col2] == ["b", "bar"]
         @test df[:col3] == ["c", "baz"]
+
+        # datetimes
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        2015-12-21T00:00:00\t2015-12-21T11:22:33\t2015-12-21T11:22:33.444
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test df[:col1] == [DateTime(2015, 12, 21, 0, 0, 0)]
+        @test df[:col2] == [DateTime(2015, 12, 21, 11, 22, 33)]
+        @test df[:col3] == [DateTime(2015, 12, 21, 11, 22, 33, 444)]
     end
 
     @testset "tricky float" begin

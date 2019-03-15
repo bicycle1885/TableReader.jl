@@ -2,6 +2,7 @@ module TableReader
 
 export readdlm, readtsv, readcsv
 
+using Dates
 using DataFrames:
     DataFrame
 using TranscodingStreams:
@@ -332,7 +333,52 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         end
         fillbuffer(stream, eager = true)
     end
+    for i in 1:ncols
+        col = columns[i]
+        if eltype(col) <: Union{String,Missing}
+            for x in col
+                if x isa String
+                    if occursin(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(:?\.\d+)?$", x)
+                        try
+                            columns[i] = parse_datetime(col)
+                        catch
+                            # not a datetime column
+                        finally
+                            break
+                        end
+                    else
+                        break
+                    end
+                end
+            end
+        end
+    end
     return DataFrame(columns, colnames)
+end
+
+function parse_datetime(col::Vector{String})
+    out = Vector{DateTime}(undef, length(col))
+    for i in 1:length(col)
+        out[i] = parse_datetime(col[i])
+    end
+    return out
+end
+
+function parse_datetime(col::Vector{Union{String,Missing}})
+    out = Vector{Union{DateTime,Missing}}(undef, length(col))
+    for i in 1:length(col)
+        x = col[i]
+        if x === missing
+            out[i] = missing
+        else
+            out[i] = parse_datetime(x)
+        end
+    end
+    return out
+end
+
+function parse_datetime(s::String)
+    return DateTime(s, dateformat"y-m-dTH:M:S.s")
 end
 
 # Count the number of lines in a memory block.
