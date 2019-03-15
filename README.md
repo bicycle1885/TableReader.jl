@@ -58,6 +58,25 @@ Here is a quick benchmarking result:
       samples:          10000
       evals/sample:     1
 
+    ~/w/TableReader (master|…) $ julia -q
+    julia> using TextParse, BenchmarkTools
+
+    julia> @time csvread("iris.csv");
+      4.743130 seconds (14.31 M allocations: 681.774 MiB, 6.98% gc time)
+
+    julia> @benchmark csvread("iris.csv")
+    BenchmarkTools.Trial:
+      memory estimate:  127.16 KiB
+      allocs estimate:  2331
+      --------------
+      minimum time:     192.463 μs (0.00% GC)
+      median time:      199.889 μs (0.00% GC)
+      mean time:        225.422 μs (7.25% GC)
+      maximum time:     45.882 ms (99.21% GC)
+      --------------
+      samples:          10000
+      evals/sample:     1
+
 
 ## Installation
 
