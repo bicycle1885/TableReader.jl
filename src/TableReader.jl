@@ -1359,8 +1359,10 @@ function scanline!(
         elseif c == SP
             @goto QUOTE_END_SPACE
         elseif c == LF
+            quoted = false
             @goto LF
         elseif c == CR
+            quoted = false
             @goto CR
         else
             @goto ERROR
