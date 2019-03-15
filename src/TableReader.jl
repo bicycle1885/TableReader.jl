@@ -881,6 +881,7 @@ function scanline!(
     @assert delim != quot
     @assert !trim || delim != SP
     @assert !trim || quot != SP
+    @assert mem[lastnl] == CR || mem[lastnl] == LF
 
     # Initialize variables.
     pos_end = lastnl
@@ -939,13 +940,11 @@ function scanline!(
             if i == ncols
                 @recordtoken MISSING
             end
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             if i == ncols
                 @recordtoken MISSING
             end
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -990,11 +989,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken STRING
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1028,11 +1025,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken INTEGER|FLOAT
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken INTEGER|FLOAT
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1048,10 +1043,8 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1081,11 +1074,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken STRING
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1117,11 +1108,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken FLOAT
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken FLOAT
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1153,11 +1142,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken STRING
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1187,11 +1174,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken STRING
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1221,11 +1206,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken FLOAT
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken FLOAT
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1253,11 +1236,9 @@ function scanline!(
             @goto STRING
         elseif c == LF
             @recordtoken FLOAT|STRING
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken FLOAT|STRING
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1273,10 +1254,8 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1320,15 +1299,13 @@ function scanline!(
             else
                 @recordtoken STRING
             end
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
             if qstring
                 @recordtoken QSTRING
             else
                 @recordtoken STRING
             end
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1344,10 +1321,8 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
-            @endtoken
             @goto CR
         else
             @multibytestring
@@ -1367,10 +1342,10 @@ function scanline!(
             end
             @goto ERROR
         elseif c == LF
-            @endtoken
-            @goto END
+            quoted = false
+            @goto LF
         elseif c == CR
-            @endtoken
+            quoted = false
             @goto CR
         else
             @goto ERROR
@@ -1384,10 +1359,8 @@ function scanline!(
         elseif c == SP
             @goto QUOTE_END_SPACE
         elseif c == LF
-            @endtoken
-            @goto END
+            @goto LF
         elseif c == CR
-            @endtoken
             @goto CR
         else
             @goto ERROR
@@ -1397,9 +1370,25 @@ function scanline!(
     @label ERROR
     throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
 
-    @label CR
+    @label CR  # carriage return
     if pos + 1 ≤ pos_end && mem[pos + 1] == LF
         pos += 1
+        # fall through
+    elseif quoted
+        @assert pos != lastnl  # TODO: format error or need more data
+        @goto STRING
+    else
+        @endtoken
+        @goto END
+    end
+
+    @label LF  # line feed
+    if quoted
+        @assert pos != lastnl  # TODO: format error or need more data
+        @goto STRING
+    else
+        @endtoken
+        # fall through
     end
 
     @label END

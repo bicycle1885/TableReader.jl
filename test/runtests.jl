@@ -449,6 +449,22 @@ end
         @test df[2,:col2] == 2
     end
 
+    @testset "multiline field" begin
+        data = """
+        col1,col2
+        "oh,
+        there
+        there","
+        multi
+        line
+        field
+        "
+        """
+        df = readcsv(IOBuffer(data))
+        @test df[:col1] == ["oh,\nthere\nthere"]
+        @test df[:col2] == ["\nmulti\nline\nfield\n"]
+    end
+
     @testset "EOF without newline" begin
         data = """
         col1,col2
