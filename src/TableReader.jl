@@ -335,25 +335,38 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     end
     for i in 1:ncols
         col = columns[i]
-        if eltype(col) <: Union{String,Missing}
-            for x in col
-                if x isa String
-                    if occursin(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(:?\.\d+)?$", x)
-                        try
-                            columns[i] = parse_datetime(col)
-                        catch
-                            # not a datetime column
-                        finally
-                            break
-                        end
-                    else
-                        break
-                    end
-                end
+        if eltype(col) <: Union{String,Missing} && is_datetime_like(col)
+            try
+                columns[i] = parse_datetime(col)
+            catch
+                # not a datetime column
             end
         end
     end
     return DataFrame(columns, colnames)
+end
+
+const DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(:?\.\d+)?$"
+
+function parse_datetime(s::String)
+    return DateTime(s, dateformat"y-m-dTH:M:S.s")
+end
+
+function is_datetime_like(col::Vector{<:Union{String,Missing}})
+    # Check if the first three strings (if any) are datetime-like.
+    i = 1
+    n = 0
+    while i ≤ length(col) && n < 3
+        x = col[i]
+        if x isa String
+            if !occursin(DATETIME_REGEX, x)
+                return false
+            end
+            n += 1
+        end
+        i += 1
+    end
+    return n > 0
 end
 
 function parse_datetime(col::Vector{String})
@@ -375,10 +388,6 @@ function parse_datetime(col::Vector{Union{String,Missing}})
         end
     end
     return out
-end
-
-function parse_datetime(s::String)
-    return DateTime(s, dateformat"y-m-dTH:M:S.s")
 end
 
 # Count the number of lines in a memory block.
