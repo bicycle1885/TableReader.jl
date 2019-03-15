@@ -262,16 +262,27 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         if chunking
             while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
                 pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                if pos == 0
+                    break
+                end
                 line += 1
             end
         else
             while pos < lastnl
                 @assert line - chunk_begin + 1 ≤ n_chunk_rows
                 pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                if pos == 0
+                    throw(ReadError("parse error; unclosed multiline quoted string?"))
+                end
                 line += 1
             end
         end
         n_new_records = line - chunk_begin
+        if n_new_records == 0
+            # the buffer is too short (TODO: or no records?)
+            TranscodingStreams.makemargin!(buffer, length(buffer) * 2)
+            continue
+        end
         bitmaps = aggregate_columns(tokens, n_new_records)
         if isempty(columns)
             # infer data types of columns
@@ -1377,7 +1388,10 @@ function scanline!(
         pos += 1
         # fall through
     elseif quoted
-        @assert pos != lastnl  # TODO: format error or need more data
+        if pos == lastnl
+            # need more data
+            return 0
+        end
         @goto STRING
     else
         @endtoken
@@ -1386,7 +1400,10 @@ function scanline!(
 
     @label LF  # line feed
     if quoted
-        @assert pos != lastnl  # TODO: format error or need more data
+        if pos == lastnl
+            # need more data
+            return 0
+        end
         @goto STRING
     else
         @endtoken
