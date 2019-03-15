@@ -283,6 +283,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     T = Union{T,Missing}
                 end
                 col = Vector{T}(undef, n_new_records)
+                @debug "Filling $(colnames[i])::$(T) column"
                 fillcolumn!(col, n_new_records, mem, tokens, i, quot)
                 columns[i] = col
             end
@@ -307,6 +308,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     # resize the column for new records
                     resize!(col, length(col) + n_new_records)
                 end
+                @debug "Filling $(colnames[i])::$(T) column"
                 fillcolumn!(col, n_new_records, mem, tokens, i, quot)
                 columns[i] = col
             end
@@ -464,36 +466,63 @@ end
     =#
 end
 
+include("stringcache.jl")
+const N_CACHED_STRINGS = 8
+
 function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    last = ""
+    cache = StringCache(N_CACHED_STRINGS)
+    usecache = true
     @inbounds for i in 1:nvals
-        col[end-nvals+i] = last = try_reuse_string(last, mem, tokens[c,i], quot)
+        t = tokens[c,i]
+        start, length = location(t)
+        if kind(t) & QSTRING != 0
+            s = qstring(mem, start, length, quot)
+        elseif usecache
+            s = allocate!(cache, mem.ptr + start - 1, length % UInt64)
+        else
+            s = unsafe_string(mem.ptr + start - 1, length)
+        end
+        col[end-nvals+i] = s
+        if usecache && i % 4096 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
+            # stop using cache because the cache hit rate is too low
+            usecache = false
+        end
     end
+    if !usecache
+        @debug "Cache is turned off"
+    end
+    @debug cache
     return col
 end
 
 function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
-    last = ""
+    cache = StringCache(N_CACHED_STRINGS)
+    usecache = true
     @inbounds for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
         else
-            col[end-nvals+i] = last = try_reuse_string(last, mem, t, quot)
+            start, length = location(t)
+            if kind(t) & QSTRING != 0
+                s = qstring(mem, start, length, quot)
+            elseif usecache
+                s = allocate!(cache, mem.ptr + start - 1, length % UInt64)
+            else
+                s = unsafe_string(mem.ptr + start - 1, length)
+            end
+            col[end-nvals+i] = s
+            if usecache && i % 4096 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
+                # stop using cache because the cache hit rate is too low
+                usecache = false
+            end
         end
     end
-    return col
-end
-
-@inline function try_reuse_string(last::String, mem::Memory, token::Token, quot::UInt8)
-    start, length = location(token)
-    if kind(token) & QSTRING != 0
-        return qstring(mem, start, length, quot)
-    elseif length == sizeof(last) && ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), mem.ptr + start - 1, pointer(last), length) == 0
-        return last
-    else
-        return unsafe_string(mem.ptr + start - 1, length)
+    if !usecache
+        @debug "Cache is turned off"
     end
+    @debug cache
+    return col
 end
 
 function qstring(mem::Memory, start::Int, length::Int, quot::UInt8)
