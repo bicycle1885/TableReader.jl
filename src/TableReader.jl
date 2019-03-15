@@ -30,7 +30,7 @@ const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
             quot = '"',
             trim = true,
             header = nothing,
-            chunksize = $(DEFAULT_CHUNK_SIZE))
+            chunksize = 1 MiB)
 
 Read a character delimited text file.
 
@@ -51,8 +51,10 @@ If unnamed columns are found in the header, they are renamed to `UNNAMED_{j}`
 for ease of access, where `{j}` is replaced by the column number.
 
 A text file will be read chunk by chunk to save memory. The chunk size is
-specified by the `chunksize` parameter, which is set to 1 MiB by default.
-The data type of each column is guessed from the values in the first chunk.
+specified by the `chunksize` parameter, which is set to 1 MiB by default.  The
+data type of each column is guessed from the values in the first chunk.  If
+`chunksize` is set to zero, it disables chunking and the data types are guessed
+from all rows.
 """
 function readdlm end
 
@@ -295,9 +297,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 col = columns[i]
                 T = eltype(col)
                 if T <: Union{Int,Missing}
-                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i)"))
+                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
                 elseif T <: Union{Float64,Missing}
-                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i)"))
+                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
                 else
                     @assert T <: Union{String,Missing}
                 end
