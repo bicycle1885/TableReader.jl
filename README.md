@@ -5,6 +5,8 @@
 
 TableReader.jl does not waste your time.
 
+Features:
+
 - Carefully optimized for speed.
 - Transparently decompresses gzip, xz, and zstd data.
 - Read data from a local file, a remote file, or a running process.
@@ -81,7 +83,7 @@ Here is a quick benchmarking result:
 ## Installation
 
 This package depends on the latest version of
-[TranscodingStreams.jl](https://github.com/bicycle1885/TranscodingStreams.jl) (v0.9.2 or newer).  Please
+[TranscodingStreams.jl][transcodingstreams-url] (v0.9.2 or newer).  Please
 update it if it is older than required, and then add this package as follows:
 
     pkg> add https://github.com/bicycle1885/TableReader.jl
@@ -108,5 +110,52 @@ dataframe = readcsv("https://example.com/somefile.csv")
 # Read stdout from a process.
 dataframe = readcsv(`unzip -p data.zip somefile.csv`)
 ```
+
+
+## Design notes
+
+TableReader.jl is aimed at users who want to keep the easy things easy.  Thus,
+it exports a simple function, `readdlm`, that reads a tabular text file into a
+dataframe.  For ease of use, `readcsv` and `readtsv` functions, thin wrapper
+functions around `readdlm` with sensible default parameters, are also exported.
+These two functions are for CSV and TSV file formats, respectively. No other
+functions except the three are exported from this package.
+
+The three functions takes an object as the source of tabular data. The source
+object may be a filename, an URL string, a command, or any I/O object. For
+example, the following examples will work as you expect:
+
+```julia
+readcsv("path/to/filename.csv")
+readcsv("https://example.com/path/to/filename.csv")
+readcsv(`unzip -p path/to/dataset.zip filename.csv`)
+readcsv(IOBuffer(some_csv_data))
+```
+
+In addition, these functions guess the file format from the magic bytes if any.
+Currently, plain text, gzip, xz, and zstd are detectable. These file formats
+are transparently decompressed if required and thus the user does not need to
+decompress a file in advance.
+
+Column data types are guessed from the data. Currently, integers (`Int`),
+floating-point numbers (`Float64`), dates (`Date`), datetimes (`DateTime`), and
+strings (`String`) are supported. If empty cells (i.e., two consective
+delimiters, or a delimiter and a newline) are found, they are interpreted as
+missing values. Such a column is converted to a vector of
+`Vector{Union{T,Missing}}`, where `T` refers to a data type guessed from
+non-missing values.
+
+To reduce memory usage, the parser of this package reads data chunk by chunk.
+The default chunk size is 1 MiB, and data types are guessed using the bufferred
+data in the first chunk. Although this strategy works in most cases, you may
+encounter situation where most values in a column looks like integers but only
+few are not parsable as integers. If you are bad luck, such anomalies are not
+in the first chunk and parsing will fail when the parser sees the first
+occurrence.  To avoid the problem, you can turn off the chunking behavior by
+setting the `chunksize` parameter to zero. For example,
+`readcsv("somefile.csv", chunksize = 0)` will read the whole file into memory
+as a single large chunk and column types are guessed from all of the cells.
+While this requires more memories, you will never see parsing error due to the
+failure of type guessing.
 
 [transcodingstreams-url]: https://github.com/bicycle1885/TranscodingStreams.jl
