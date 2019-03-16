@@ -148,14 +148,24 @@ non-missing values.
 To reduce memory usage, the parser of this package reads data chunk by chunk.
 The default chunk size is 1 MiB, and data types are guessed using the bufferred
 data in the first chunk. Although this strategy works in most cases, you may
-encounter situation where most values in a column looks like integers but only
+encounter situation where most values in a column look like integers but only
 few are not parsable as integers. If you are bad luck, such anomalies are not
-in the first chunk and parsing will fail when the parser sees the first
-occurrence.  To avoid the problem, you can turn off the chunking behavior by
-setting the `chunksize` parameter to zero. For example,
-`readcsv("somefile.csv", chunksize = 0)` will read the whole file into memory
-as a single large chunk and column types are guessed from all of the cells.
-While this requires more memories, you will never see parsing error due to the
-failure of type guessing.
+in the first chunk and type guessing may fail. Consequently, parsing will also
+fail when the parser sees the first occurrence.  To avoid the problem, you can
+turn off the chunking behavior by setting the `chunksize` parameter to zero.
+For example, `readcsv("somefile.csv", chunksize = 0)` will read the whole file
+into memory as a single large chunk and column types are guessed from all of
+the cells.  While this requires more memories, you will never see parsing error
+due to the failure of type guessing.
+
+
+## Limitations
+
+The tokenizer cannot handle extremely long cells in a data file. The length of
+a token is encoded using 24-bit integer, and therefore a cell that is longer
+than or equal to 16 MiB will result in parsing failure. This is not likely to
+happen, but please be careful if, for example, a column contains long strings.
+Also, the size of a chunk is limited up to 64 GiB; you cannot disable chunking
+if the data size is larger than that.
 
 [transcodingstreams-url]: https://github.com/bicycle1885/TranscodingStreams.jl
