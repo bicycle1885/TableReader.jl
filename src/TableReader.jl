@@ -841,11 +841,9 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
             @goto STRING
         elseif c == LF
             @recordtoken STRING
-            @endheadertoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endheadertoken
             @goto CR
         else
             @multibytestring
@@ -890,11 +888,9 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
                 @recordtoken STRING
             end
             @recordtoken STRING
-            @endheadertoken
-            @goto END
+            @goto LF
         elseif c == CR
             @recordtoken STRING
-            @endheadertoken
             @goto CR
         else
             @multibytestring
@@ -910,10 +906,8 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
-            @endheadertoken
-            @goto END
+            @goto LF
         elseif c == CR
-            @endheadertoken
             @goto CR
         else
             @multibytestring
@@ -933,10 +927,10 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
             end
             @goto ERROR
         elseif c == LF
-            @endheadertoken
-            @goto END
+            quoted = false
+            @goto LF
         elseif c == CR
-            @endheadertoken
+            quoted = false
             @goto CR
         else
             @goto ERROR
@@ -950,10 +944,10 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
         elseif c == SP
             @goto QUOTE_END_SPACE
         elseif c == LF
-            @endheadertoken
-            @goto END
+            quoted = false
+            @goto LF
         elseif c == CR
-            @endheadertoken
+            quoted = false
             @goto CR
         else
             @goto ERROR
@@ -964,9 +958,17 @@ function scanheader(mem::Memory, pos::Int, nl::Int, delim::UInt8, quot::UInt8, t
     throw(ReadError("invalid file header format"))
 
     @label CR
-    if pos + 1 ≤ pos_end && mem[pos + 1] == LF
+    if quoted
+        throw(ReadError("quoted multiline string is not allowed in the header"))
+    elseif pos + 1 ≤ pos_end && mem[pos + 1] == LF
         pos += 1
     end
+
+    @label LF
+    if quoted
+        throw(ReadError("quoted multiline string is not allowed in the header"))
+    end
+    @endheadertoken
 
     @label END
     return pos, tokens
