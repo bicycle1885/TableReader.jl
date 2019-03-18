@@ -233,21 +233,44 @@ end
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     delim, quot, trim = params.delim, params.quot, params.trim
     chunking = params.chunksize != 0
+    line = params.skip
     skiplines(stream, params.skip)
+    buffer = stream.state.buffer1
     if params.colnames === nothing
+        # Read the header line to get the column names
         colnames = readheader(stream, delim, quot, trim)
+        if any(name -> name === Symbol(""), colnames)
+            rename_unnamed_columns!(colnames)
+        end
+        ncols = length(colnames)
+        if ncols == 0
+            return DataFrame()
+        end
+        line += 1
+        # Get the number of data columns from the first record
+        mem, lastnl = bufferlines(stream)
+        if lastnl == 0 && fillbuffer(stream, eager = true) == 0
+            # reached EOF without newline marker, so insert an LF to cheat the parser
+            makemargin!(buffer, 1)
+            TranscodingStreams.writebyte!(buffer, LF)
+            mem, lastnl = bufferlines(stream)
+        end
+        @assert lastnl > 0
+        pos, i = scanline!(Array{Token}(undef, (ncols + 1, 1)), 1, mem, 0, lastnl, line, delim, quot, trim)
+        if i == ncols
+            # ok
+        elseif i == ncols + 1
+            # the first column is supposed to be unnamed
+            ncols += 1
+            pushfirst!(colnames, :UNNAMED_0)
+        else
+            throw(ReadError("unexpected number of columns at line $(line)"))
+        end
     else
         colnames = params.colnames
+        ncols = length(colnames)
     end
-    if any(name -> name === Symbol(""), colnames)
-        rename_unnamed_columns!(colnames)
-    end
-    ncols = length(colnames)
-    if ncols == 0
-        return DataFrame()
-    end
-    fillbuffer(stream, eager = true)
-    buffer = stream.state.buffer1
+
     nrows_estimated = countlines(buffermem(buffer))
     if nrows_estimated == 0
         nrows_estimated = countlines(buffermem(buffer), byte = CR)
@@ -257,7 +280,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     tokens = Array{Token}(undef, (ncols, n_chunk_rows))
     #fill!(tokens, Token(0x00, 0, 0))
     columns = Vector[]
-    line = 2
     while !eof(stream)
         mem, lastnl = bufferlines(stream)
         if lastnl == 0 && fillbuffer(stream, eager = true) == 0
@@ -272,18 +294,22 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         chunk_begin = line
         if chunking
             while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
-                pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
                 if pos == 0
                     break
+                elseif i != ncols
+                    throw(ReadError("invalid number of columns at line $(line)"))
                 end
                 line += 1
             end
         else
             while pos < lastnl
                 @assert line - chunk_begin + 1 ≤ n_chunk_rows
-                pos = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+                pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
                 if pos == 0
                     throw(ReadError("parse error; unclosed multiline quoted string?"))
+                elseif i != ncols
+                    throw(ReadError("invalid number of columns at line $(line)"))
                 end
                 line += 1
             end
@@ -1058,7 +1084,7 @@ function scanline!(
     qstring = false
     token = TOKEN_NULL
     start = 0  # the starting position of a token
-    i = 1  # the current token
+    i = 1  # the column of a token
 
     @state BEGIN begin
         @begintoken
@@ -1547,7 +1573,7 @@ function scanline!(
     elseif quoted
         if pos == lastnl
             # need more data
-            return 0
+            return 0, 0
         end
         @goto STRING
     else
@@ -1559,7 +1585,7 @@ function scanline!(
     if quoted
         if pos == lastnl
             # need more data
-            return 0
+            return 0, 0
         end
         @goto STRING
     else
@@ -1568,10 +1594,10 @@ function scanline!(
     end
 
     @label END
-    if i ≤ ncols
-        throw(ReadError("invalid number of columns at line $(line)"))
-    end
-    return pos
+    #if i ≤ ncols
+    #    throw(ReadError("invalid number of columns at line $(line)"))
+    #end
+    return pos, i - 1
 end
 
 # Generated from tools/snoop.jl.

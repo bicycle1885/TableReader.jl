@@ -278,7 +278,7 @@ using Test
         # more columns than expected
         data = """
         col1\tcol2\tcol3
-        foo\tbar\tbaz\tqux
+        foo\tbar\tbaz\tqux\tquux
         """
         @test_throws TableReader.ReadError readtsv(IOBuffer(data))
     end
@@ -509,6 +509,18 @@ end
         @test df[:UNNAMED_2] == ["foo"]
         @test df[:col3] == [3]
         @test df[:UNNAMED_4] == ["bar"]
+    end
+
+    @testset "implicit column" begin
+        data = """
+        col1,col2,col3
+        foo,1,2,3
+        """
+        df = readcsv(IOBuffer(data))
+        @test df[:UNNAMED_0] == ["foo"]
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
     end
 
     @testset "skip lines" begin
