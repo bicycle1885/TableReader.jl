@@ -101,7 +101,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -114,12 +114,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -143,37 +143,37 @@ struct ParserParameters
     skip::Int
     colnames::Union{Vector{Symbol},Nothing}
     chunksize::Int
-end
 
-function check_parser_parameters(delim::Char, quot::Char, trim::Bool, skip::Integer, header::Any, chunksize::Integer)
-    if delim ∉ ALLOWED_DELIMITERS
-        throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
-    elseif quot ∉ ALLOWED_DELIMITERS
-        throw(ArgumentError("quotation mark $(repr(quot)) is not allowed"))
-    elseif delim == quot
-        throw(ArgumentError("delimiter and quotation mark cannot be the same character"))
-    elseif delim == ' ' && trim
-        throw(ArgumentError("delimiting with space and space trimming are exclusive"))
-    elseif quot == ' ' && trim
-        throw(ArgumentError("quoting with space and space trimming are exclusive"))
-    elseif skip < 0
-        throw(ArgumentError("skip cannot be negative"))
-    elseif chunksize < 0
-        throw(ArgumentError("chunks size cannot be negative"))
+    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, header::Any, chunksize::Integer)
+        if delim ∉ ALLOWED_DELIMITERS
+            throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
+        elseif quot ∉ ALLOWED_DELIMITERS
+            throw(ArgumentError("quotation mark $(repr(quot)) is not allowed"))
+        elseif delim == quot
+            throw(ArgumentError("delimiter and quotation mark cannot be the same character"))
+        elseif delim == ' ' && trim
+            throw(ArgumentError("delimiting with space and space trimming are exclusive"))
+        elseif quot == ' ' && trim
+            throw(ArgumentError("quoting with space and space trimming are exclusive"))
+        elseif skip < 0
+            throw(ArgumentError("skip cannot be negative"))
+        elseif chunksize < 0
+            throw(ArgumentError("chunks size cannot be negative"))
+        end
+        if header != nothing
+            colnames = Symbol.(collect(header))
+        else
+            colnames = nothing
+        end
+        return new(
+            UInt8(delim),
+            UInt8(quot),
+            trim,
+            skip,
+            colnames,
+            chunksize,
+        )
     end
-    if header != nothing
-        colnames = Symbol.(collect(header))
-    else
-        colnames = nothing
-    end
-    return ParserParameters(
-        UInt8(delim),
-        UInt8(quot),
-        trim,
-        skip,
-        colnames,
-        chunksize,
-    )
 end
 
 # Wrap a stream by TranscodingStream.
@@ -1565,7 +1565,7 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
     precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
-    precompile(Tuple{typeof(TableReader.check_parser_parameters), Char, Char, Bool, Nothing, Int64})
+    precompile(Tuple{typeof(TableReader.ParserParameters), Char, Char, Bool, Nothing, Int64})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
