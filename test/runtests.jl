@@ -511,6 +511,19 @@ end
         @test df[:UNNAMED_4] == ["bar"]
     end
 
+    @testset "skip lines" begin
+        data = """
+        foobarbaz
+        hogehogehoge
+        col1,col2,col3
+        1,2,3
+        """
+        df = readcsv(IOBuffer(data), skip = 2)
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+    end
+
     @testset "from file" begin
         df = readcsv(joinpath(@__DIR__, "test.csv"))
         @test df[:col1] == [1, 2]

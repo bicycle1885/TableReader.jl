@@ -14,6 +14,7 @@ using TranscodingStreams:
     State,
     Noop,
     fillbuffer,
+    makemargin!,
     buffermem
 using CodecZlib:
     GzipDecompressorStream
@@ -30,6 +31,7 @@ const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
             delim,
             quot = '"',
             trim = true,
+            skip = 0,
             header = nothing,
             chunksize = 1 MiB)
 
@@ -43,6 +45,10 @@ character as `delim`.
 
 `trim` specifies whether the parser trims space (0x20) characters around a field.
 If `trim` is true, `delim` and `quot` cannot be a space character.
+
+`skip` specifies the number of lines to skip before reading data.  The next
+line just after the skipped lines is considered as a header line if the
+`header` parameter is not specified.
 
 `header` specifies the column names. If `header` is `nothing` (default), the
 column names are read from the first line of the text file. Any iterable object
@@ -88,13 +94,14 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
     end
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
+    push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(header), nothing))  # header = nothing
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, header, chunksize)
+            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -107,12 +114,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, header, chunksize)
+            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = check_parser_parameters(delim, quot, trim, header, chunksize)
+            params = check_parser_parameters(delim, quot, trim, skip, header, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -133,11 +140,12 @@ struct ParserParameters
     delim::UInt8
     quot::UInt8
     trim::Bool
+    skip::Int
     colnames::Union{Vector{Symbol},Nothing}
     chunksize::Int
 end
 
-function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::Any, chunksize::Integer)
+function check_parser_parameters(delim::Char, quot::Char, trim::Bool, skip::Integer, header::Any, chunksize::Integer)
     if delim ∉ ALLOWED_DELIMITERS
         throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
     elseif quot ∉ ALLOWED_DELIMITERS
@@ -148,6 +156,8 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::An
         throw(ArgumentError("delimiting with space and space trimming are exclusive"))
     elseif quot == ' ' && trim
         throw(ArgumentError("quoting with space and space trimming are exclusive"))
+    elseif skip < 0
+        throw(ArgumentError("skip cannot be negative"))
     elseif chunksize < 0
         throw(ArgumentError("chunks size cannot be negative"))
     end
@@ -160,6 +170,7 @@ function check_parser_parameters(delim::Char, quot::Char, trim::Bool, header::An
         UInt8(delim),
         UInt8(quot),
         trim,
+        skip,
         colnames,
         chunksize,
     )
@@ -222,6 +233,7 @@ end
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     delim, quot, trim = params.delim, params.quot, params.trim
     chunking = params.chunksize != 0
+    skiplines(stream, params.skip)
     if params.colnames === nothing
         colnames = readheader(stream, delim, quot, trim)
     else
@@ -251,7 +263,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         lastnl = find_last_newline(mem)
         if lastnl == 0 && fillbuffer(stream, eager = true) == 0
             # reached EOF without newline marker, so insert an LF to cheat the parser
-            TranscodingStreams.makemargin!(buffer, 1)
+            makemargin!(buffer, 1)
             TranscodingStreams.writebyte!(buffer, LF)
             mem = buffermem(buffer)
             lastnl = find_last_newline(mem)
@@ -281,7 +293,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         n_new_records = line - chunk_begin
         if n_new_records == 0
             # the buffer is too short (TODO: or no records?)
-            TranscodingStreams.makemargin!(buffer, length(buffer) * 2)
+            makemargin!(buffer, length(buffer) * 2)
             continue
         end
         bitmaps = aggregate_columns(tokens, n_new_records)
@@ -659,6 +671,27 @@ function qstring(mem::Memory, start::Int, length::Int, quot::UInt8)
         i += 1
     end
     return String(take!(buf))
+end
+
+# Skip the number of lines specified by `skip`.
+function skiplines(stream::TranscodingStream, skip::Int)
+    buffer = stream.state.buffer1
+    n = skip
+    while n > 0
+        fillbuffer(stream, eager = true)
+        mem = buffermem(buffer)
+        nl = find_first_newline(mem, 1)
+        if nl == 0  # no newline
+            if eof(stream)
+                break
+            end
+            # expand buffer
+            makemargin!(buffer, length(buffer) * 2)
+        else
+            Base.skip(stream, nl)
+            n -= 1
+        end
+    end
 end
 
 # Read header and return column names.
