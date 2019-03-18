@@ -259,14 +259,12 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     columns = Vector[]
     line = 2
     while !eof(stream)
-        mem = buffermem(buffer)
-        lastnl = find_last_newline(mem)
+        mem, lastnl = bufferlines(stream)
         if lastnl == 0 && fillbuffer(stream, eager = true) == 0
             # reached EOF without newline marker, so insert an LF to cheat the parser
             makemargin!(buffer, 1)
             TranscodingStreams.writebyte!(buffer, LF)
-            mem = buffermem(buffer)
-            lastnl = find_last_newline(mem)
+            mem, lastnl = bufferlines(stream)
         end
         # maybe, found a line that is too long?
         @assert lastnl > 0
@@ -748,16 +746,39 @@ function find_first_newline(mem::Memory, i::Int)
     return i
 end
 
-function find_last_newline(mem::Memory)
-    i = lastindex(mem)
-    while i > 0
-        @inbounds x = mem[i]
-        if x == LF || x == CR
+# Buffer lines into memory and return the memory and the last newline position.
+function bufferlines(stream::TranscodingStream)
+    fillbuffer(stream, eager = true)
+    buffer = stream.state.buffer1
+    mem = buffermem(buffer)
+    # find the last newline
+    nl = lastindex(mem)
+    while nl > 0
+        @inbounds x = mem[nl]
+        if x == LF
+            break
+        elseif x == CR
+            if nl != lastindex(mem)
+                # CR
+                break
+            end
+            # CR or CR+LF
+            makemargin!(buffer, 1)
+            fillbuffer(stream, eager = true)
+            mem = buffermem(buffer)
+            nl = lastindex(mem)
+            while nl > 0
+                @inbounds x = mem[nl]
+                if x == LF || x == CR
+                    break
+                end
+                nl -= 1
+            end
             break
         end
-        i -= 1
+        nl -= 1
     end
-    return i
+    return mem, nl
 end
 
 
