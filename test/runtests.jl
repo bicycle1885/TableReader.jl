@@ -600,5 +600,9 @@ end
         @test df[:col1] == ["foo"]
         @test df[:col2] == ["bar"]
         @test df[:col3] == ["baz"]
+
+        # invalid chunksize
+        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = -1)
+        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = 2^63-1)
     end
 end

@@ -24,7 +24,9 @@ struct ParserParameters
         elseif skip < 0
             throw(ArgumentError("skip cannot be negative"))
         elseif chunksize < 0
-            throw(ArgumentError("chunks size cannot be negative"))
+            throw(ArgumentError("chunk size cannot be negative"))
+        elseif chunksize ≥ MAX_TOKEN_START
+            throw(ArgumentError("chunk size must be less than $(MAX_TOKEN_START)"))
         end
         if header != nothing
             colnames = Symbol.(collect(header))
