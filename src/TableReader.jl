@@ -27,6 +27,12 @@ using CodecXz:
 const DEFAULT_CHUNK_SIZE =  1 * 2^20  #  1 MiB
 const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
 
+# Printable characters
+const CHARS_PRINT = ' ':'~'
+
+# Whitelist of delimiters
+const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
+
 """
     readdlm(filename or IO object;
             delim,
@@ -39,7 +45,8 @@ const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
 Read a character delimited text file.
 
 `delim` specifies the field delimiter in a line. This must be tab, space, or an
-ASCII punctuation character.
+ASCII punctuation character.  Currently, the following delimiters are allowed:
+$(join(repr.(ALLOWED_DELIMITERS), ", ")).
 
 `quot` specifies the quotation to enclose a field. This cannot be the same
 character as `delim`.
@@ -129,12 +136,6 @@ end
 const SP = UInt8(' ')
 const CR = UInt8('\r')
 const LF = UInt8('\n')
-
-# Printable characters
-const CHARS_PRINT = ' ':'~'
-
-# Whitelist of delimiters
-const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
 
 # A set of parser parameters.
 struct ParserParameters
