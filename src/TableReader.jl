@@ -253,7 +253,7 @@ end
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     delim, quot, trim = params.delim, params.quot, params.trim
     chunking = params.chunksize != 0
-    line = params.skip
+    line = params.skip + 1
     skiplines(stream, params.skip)
     buffer = stream.state.buffer1
     if params.colnames === nothing

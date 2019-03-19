@@ -273,14 +273,14 @@ using Test
         col1\tcol2\tcol3
         foo\tbar
         """
-        @test_throws TableReader.ReadError readtsv(IOBuffer(data))
+        @test_throws TableReader.ReadError("unexpected number of columns at line 2") readtsv(IOBuffer(data))
 
         # more columns than expected
         data = """
         col1\tcol2\tcol3
         foo\tbar\tbaz\tqux\tquux
         """
-        @test_throws TableReader.ReadError readtsv(IOBuffer(data))
+        @test_throws TableReader.ReadError("unexpected number of columns at line 2") readtsv(IOBuffer(data))
     end
 
     @testset "UTF-8 strings" begin

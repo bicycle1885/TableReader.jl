@@ -293,6 +293,7 @@ end
 macro endtoken()
     quote
         if i > ncols
+            msg = "unexpected number of columns at line $(line)"
             @goto ERROR
         end
         @inbounds tokens[i,row] = token
@@ -324,6 +325,7 @@ function scanline!(
     quoted = false
     qstring = false
     token = TOKEN_NULL
+    msg = ""  # error message
     start = 0  # the starting position of a token
     i = 1  # the column of a token
 
@@ -805,7 +807,11 @@ function scanline!(
     end
 
     @label ERROR
-    throw(ReadError("invalid file format at line $(line), char $(repr(c))"))
+    if isempty(msg)
+        # default error message
+        msg = "invalid file format at line $(line), byte $(repr(c))"
+    end
+    throw(ReadError(msg))
 
     @label CR  # carriage return
     if pos + 1 ≤ pos_end && mem[pos + 1] == LF
@@ -835,8 +841,5 @@ function scanline!(
     end
 
     @label END
-    #if i ≤ ncols
-    #    throw(ReadError("invalid number of columns at line $(line)"))
-    #end
     return pos, i - 1
 end
