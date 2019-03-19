@@ -1,6 +1,6 @@
 module TableReader
 
-export readdlm, readtsv, readcsv
+export readdlm, readcsv, readtsv
 
 using Dates:
     Date,
@@ -48,6 +48,9 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             chunksize = 1 MiB)
 
 Read a character delimited text file.
+
+[`readcsv`](@ref) and [`readtsv`](@ref) call this function behind. To read a
+CSV or TSV file, consider to use these dedicated function instead.
 
 
 ## Data source
@@ -109,7 +112,7 @@ column.  This is useful to read files written by the `write.table` function of
 R with `row.names = TRUE`.
 
 
-## Text reading behavior
+## Parsing behavior
 
 The only supported text encoding of a file is UTF-8, which is the default
 character encoding scheme of many functions in Julia.  If you need to read text
@@ -125,16 +128,6 @@ from all rows.
 function readdlm end
 
 """
-    readtsv(filename or IO object; delim = '\\t', <keyword arguments>)
-
-Read a TSV (tab-separated values) text file.
-
-This function is the same as [`readdlm`](@ref) but with `delim = '\\t'`.
-See `readdlm` for details.
-"""
-function readtsv end
-
-"""
     readcsv(filename or IO object; delim = ',', <keyword arguments>)
 
 Read a CSV (comma-separated values) text file.
@@ -144,7 +137,17 @@ See `readdlm` for details.
 """
 function readcsv end
 
-for (fname, delim) in [(:readdlm, nothing), (:readtsv, '\t'), (:readcsv, ',')]
+"""
+    readtsv(filename or IO object; delim = '\\t', <keyword arguments>)
+
+Read a TSV (tab-separated values) text file.
+
+This function is the same as [`readdlm`](@ref) but with `delim = '\\t'`.
+See `readdlm` for details.
+"""
+function readtsv end
+
+for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     # prepare keyword arguments
     kwargs = Expr[]
     if delim === nothing
