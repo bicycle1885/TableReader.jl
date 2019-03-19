@@ -56,9 +56,10 @@ The first (and the only positional) argument specifies the source to read data
 from there.
 
 If the argument is a string, it is considered as a local file name or the URL
-of a remote file. If the name matches with "^\w+://" in regular expression, it
-is handled as a URL. For example, `"https://example.com/path/to/file.csv"` is
-regarded as a URL and its content is streamed using the `curl` command.
+of a remote file. If the name matches with `r"^\\w+://.*"` in regular
+expression, it is handled as a URL. For example,
+`"https://example.com/path/to/file.csv"` is regarded as a URL and its content
+is streamed using the `curl` command.
 
 If the argument is a command object, it is considered as a source whose
 standard output is text data to read. For example, `unzip -p path/to/file.zip
