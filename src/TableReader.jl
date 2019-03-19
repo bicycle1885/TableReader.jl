@@ -127,6 +127,11 @@ character encoding scheme of many functions in Julia.  If you need to read text
 encoded other than UTF-8, it is required to wrap the data stream with an
 encoding conversion tool such as the `iconv` command or StringEncodings.jl.
 
+```julia
+# Convert text encoding from Shift JIS (Japanese) to UTF8.
+readcsv(`iconv -f sjis -t utf8 somefile.csv`)
+```
+
 A text file will be read chunk by chunk to save memory. The chunk size is
 specified by the `chunksize` parameter, which is set to 1 MiB by default.  The
 data type of each column is guessed from the values in the first chunk.  If
