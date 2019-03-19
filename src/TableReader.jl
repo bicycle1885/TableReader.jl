@@ -410,7 +410,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
 end
 
 function throw_typeguess_error(column::Int)
-    throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
+    throw(ReadError("type guessing failed at column $(column); try larger chunksize or chunksize = 0 to disable chunking"))
 end
 
 function expandbuffer!(stream::TranscodingStream)
