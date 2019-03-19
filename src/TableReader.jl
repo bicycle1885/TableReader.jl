@@ -253,8 +253,8 @@ end
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     delim, quot, trim = params.delim, params.quot, params.trim
     chunking = params.chunksize != 0
-    line = params.skip + 1
     skiplines(stream, params.skip)
+    line = params.skip + 1
 
     # Determine column names
     mem, lastnl = bufferlines(stream)
@@ -263,6 +263,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         # Scan the header line to get the column names
         n, headertokens = scanheader(mem, 0, lastnl, delim, quot, trim)
         skip(stream, n)
+        if length(headertokens) == 1 && location(headertokens[1])[2] == 0  # zero-length token
+            throw(ReadError("found no column names in the header at line $(line)"))
+        end
         line += 1
         colnames = Symbol[]
         for (i, token) in enumerate(headertokens)

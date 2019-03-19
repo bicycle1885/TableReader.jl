@@ -4,11 +4,6 @@ using Test
 
 @testset "readtsv" begin
     @testset "simple" begin
-        # empty
-        buffer = IOBuffer("")
-        df = readtsv(buffer)
-        #@test isempty(names(df))
-
         # integers
         buffer = IOBuffer("""
         col1\tcol2\tcol3
@@ -267,7 +262,10 @@ using Test
         @test_throws OverflowError readtsv(IOBuffer(data))
     end
 
-    @testset "malformed file" begin
+    @testset "malformed data" begin
+        # empty
+        @test_throws TableReader.ReadError("found no column names in the header at line 1") readtsv(IOBuffer(""))
+
         # less columns than expected
         data = """
         col1\tcol2\tcol3
@@ -392,11 +390,6 @@ end
 
 @testset "readcsv" begin
     @testset "simple" begin
-        # empty
-        buffer = IOBuffer("")
-        df = readcsv(buffer)
-        #@test isempty(names(df))
-
         # integers
         buffer = IOBuffer("""
         col1,col2,col3
@@ -534,6 +527,11 @@ end
         @test df[:col1] == [1]
         @test df[:col2] == [2]
         @test df[:col3] == [3]
+    end
+
+    @testset "malformed data" begin
+        # empty
+        @test_throws TableReader.ReadError("found no column names in the header at line 1") readcsv(IOBuffer(""))
     end
 
     @testset "from file" begin
