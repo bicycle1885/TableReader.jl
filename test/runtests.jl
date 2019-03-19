@@ -2,20 +2,6 @@ using TableReader
 using Dates
 using Test
 
-@testset "readdlm" begin
-    @testset "simple" begin
-        # delimtied by |
-        buffer = IOBuffer("""
-        col1|col2|col3
-        1|2|3
-        """)
-        df = readdlm(buffer, delim = '|')
-        @test df[:col1] == [1]
-        @test df[:col2] == [2]
-        @test df[:col3] == [3]
-    end
-end
-
 @testset "readtsv" begin
     @testset "simple" begin
         # empty
@@ -590,5 +576,29 @@ end
             @test df[:col2] == [1.0, 2.0]
             @test df[:col3] == ["one", "two"]
         end
+    end
+end
+
+@testset "readdlm" begin
+    @testset "custom parser parameters" begin
+        # delimtied by |
+        data = """
+        col1|col2|col3
+        1|2|3
+        """
+        df = readdlm(IOBuffer(data), delim = '|')
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+
+        # quoted by `
+        data = """
+        col1,col2,col3
+        `foo`,`bar`,`baz`
+        """
+        df = readdlm(IOBuffer(data), delim = ',', quot = '`')
+        @test df[:col1] == ["foo"]
+        @test df[:col2] == ["bar"]
+        @test df[:col3] == ["baz"]
     end
 end

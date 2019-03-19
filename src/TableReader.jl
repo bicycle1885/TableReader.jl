@@ -30,8 +30,9 @@ const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
 # Printable characters
 const CHARS_PRINT = ' ':'~'
 
-# Whitelist of delimiters
+# Whitelist of delimiters and quotation marks
 const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
+const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]...)
 
 """
     readdlm(filename or IO object;
@@ -44,12 +45,13 @@ const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .|
 
 Read a character delimited text file.
 
-`delim` specifies the field delimiter in a line. This must be tab, space, or an
-ASCII punctuation character.  Currently, the following delimiters are allowed:
+`delim` specifies the field delimiter in a line.  This cannot be the same
+character as `quot`.  Currently, the following delimiters are allowed:
 $(join(repr.(ALLOWED_DELIMITERS), ", ")).
 
-`quot` specifies the quotation to enclose a field. This cannot be the same
-character as `delim`.
+`quot` specifies the quotation character to enclose a field. This cannot be the
+same character as `delim`. Currently, the following quotation characters are
+allowed: $(join(repr.(ALLOWED_QUOTECHARS), ", ")).
 
 `trim` specifies whether the parser trims space (0x20) characters around a field.
 If `trim` is true, `delim` and `quot` cannot be a space character.
@@ -149,10 +151,10 @@ struct ParserParameters
     function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, header::Any, chunksize::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
-        elseif quot ∉ ALLOWED_DELIMITERS
-            throw(ArgumentError("quotation mark $(repr(quot)) is not allowed"))
+        elseif quot ∉ ALLOWED_QUOTECHARS
+            throw(ArgumentError("quotation character $(repr(quot)) is not allowed"))
         elseif delim == quot
-            throw(ArgumentError("delimiter and quotation mark cannot be the same character"))
+            throw(ArgumentError("delimiter and quotation character cannot be the same character"))
         elseif delim == ' ' && trim
             throw(ArgumentError("delimiting with space and space trimming are exclusive"))
         elseif quot == ' ' && trim
