@@ -255,123 +255,108 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     chunking = params.chunksize != 0
     line = params.skip + 1
     skiplines(stream, params.skip)
-    buffer = stream.state.buffer1
+
+    # Determine column names
+    mem, lastnl = bufferlines(stream)
+    @assert lastnl > 0
     if params.colnames === nothing
-        # Read the header line to get the column names
-        colnames = readheader(stream, delim, quot, trim)
-        if any(name -> name === Symbol(""), colnames)
-            rename_unnamed_columns!(colnames)
-        end
-        ncols = length(colnames)
-        if ncols == 0
-            return DataFrame()
-        end
+        # Scan the header line to get the column names
+        n, headertokens = scanheader(mem, 0, lastnl, delim, quot, trim)
+        skip(stream, n)
         line += 1
-        # Get the number of data columns from the first record
-        mem, lastnl = bufferlines(stream)
-        if lastnl == 0 && fillbuffer(stream, eager = true) == 0
-            # reached EOF without newline marker, so insert an LF to cheat the parser
-            makemargin!(buffer, 1)
-            TranscodingStreams.writebyte!(buffer, LF)
-            mem, lastnl = bufferlines(stream)
-        end
-        @assert lastnl > 0
-        pos, i = scanline!(Array{Token}(undef, (ncols + 1, 1)), 1, mem, 0, lastnl, line, delim, quot, trim)
-        if i == ncols
-            # ok
-        elseif i == ncols + 1
-            # the first column is supposed to be unnamed
-            ncols += 1
-            pushfirst!(colnames, :UNNAMED_0)
-        else
-            throw(ReadError("unexpected number of columns at line $(line)"))
+        colnames = Symbol[]
+        for (i, token) in enumerate(headertokens)
+            start, length = location(token)
+            if (kind(token) & QSTRING) != 0
+                name = qstring(mem, start, length, quot)
+            else
+                name = unsafe_string(mem.ptr + start - 1, length)
+            end
+            if isempty(name)  # unnamed column
+                name = "UNNAMED_$(i)"
+            end
+            push!(colnames, Symbol(name))
         end
     else
         colnames = params.colnames
-        ncols = length(colnames)
+    end
+    ncols = length(colnames)
+
+    # Scan the next line to get the number of data columns
+    mem, lastnl = bufferlines(stream)
+    @assert lastnl > 0
+    _, i = scanline!(Array{Token}(undef, (ncols + 1, 1)), 1, mem, 0, lastnl, line, delim, quot, trim)
+    if i == ncols
+        # ok
+    elseif i == ncols + 1
+        # the first column is supposed to be unnamed
+        ncols += 1
+        pushfirst!(colnames, :UNNAMED_0)
+    else
+        throw(ReadError("unexpected number of columns at line $(line)"))
     end
 
-    nrows_estimated = countlines(buffermem(buffer))
+    # Estimate the number of rows.
+    nrows_estimated = countbytes(mem, LF)
     if nrows_estimated == 0
-        nrows_estimated = countlines(buffermem(buffer), byte = CR)
+        nrows_estimated = countbytes(mem, CR)
     end
-    nrows_estimated += 1  # maybe insert a newline at the end
-    n_chunk_rows = nrows_estimated
+    n_chunk_rows = max(nrows_estimated, 5)  # allocate at least five rows
+
+    # Read data.
     tokens = Array{Token}(undef, (ncols, n_chunk_rows))
-    #fill!(tokens, Token(0x00, 0, 0))
     columns = Vector[]
     while !eof(stream)
+        # Tokenize data.
         mem, lastnl = bufferlines(stream)
-        if lastnl == 0 && fillbuffer(stream, eager = true) == 0
-            # reached EOF without newline marker, so insert an LF to cheat the parser
-            makemargin!(buffer, 1)
-            TranscodingStreams.writebyte!(buffer, LF)
-            mem, lastnl = bufferlines(stream)
-        end
-        # maybe, found a line that is too long?
         @assert lastnl > 0
         pos = 0
         chunk_begin = line
-        if chunking
-            while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
-                pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
-                if pos == 0
-                    break
-                elseif i != ncols
-                    throw(ReadError("invalid number of columns at line $(line)"))
-                end
-                line += 1
+        while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
+            pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+            if pos == 0
+                break
+            elseif i != ncols
+                throw(ReadError("unexpected number of columns at line $(line)"))
             end
-        else
-            while pos < lastnl
-                @assert line - chunk_begin + 1 ≤ n_chunk_rows
-                pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
-                if pos == 0
-                    throw(ReadError("parse error; unclosed multiline quoted string?"))
-                elseif i != ncols
-                    throw(ReadError("invalid number of columns at line $(line)"))
-                end
-                line += 1
-            end
+            line += 1
         end
         n_new_records = line - chunk_begin
         if n_new_records == 0
             # the buffer is too short (TODO: or no records?)
-            makemargin!(buffer, length(buffer) * 2)
+            expandbuffer!(stream)
             continue
         end
+
+        # Parse data.
         bitmaps = aggregate_columns(tokens, n_new_records)
         if isempty(columns)
             # infer data types of columns
             resize!(columns, ncols)
             for i in 1:ncols
-                parsable = bitmaps[i] & 0b0111
-                hasmissing = (bitmaps[i] & 0b1000) != 0
-                T = (parsable & INTEGER) != 0 ? Int :
-                    (parsable & FLOAT) != 0 ? Float64 : String
-                if hasmissing
+                T = (bitmaps[i] & INTEGER) != 0 ? Int :
+                    (bitmaps[i] & FLOAT) != 0 ? Float64 : String
+                if (bitmaps[i] & 0b1000) != 0
                     T = Union{T,Missing}
                 end
-                col = Vector{T}(undef, n_new_records)
                 @debug "Filling $(colnames[i])::$(T) column"
-                fillcolumn!(col, n_new_records, mem, tokens, i, quot)
-                columns[i] = col
+                columns[i] = fillcolumn!(
+                    Vector{T}(undef, n_new_records),
+                    n_new_records, mem, tokens, i, quot)
             end
         else
             # check existing columns
             for i in 1:ncols
-                parsable = bitmaps[i] & 0b0111
-                hasmissing = (bitmaps[i] & 0b1000) != 0
                 col = columns[i]
                 T = eltype(col)
                 if T <: Union{Int,Missing}
-                    (parsable & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
+                    (bitmaps[i] & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
                 elseif T <: Union{Float64,Missing}
-                    (parsable & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
+                    (bitmaps[i] & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
                 else
                     @assert T <: Union{String,Missing}
                 end
-                if hasmissing && !(T >: Union{T,Missing})
+                if (bitmaps[i] & 0b1000) != 0 && !(T >: Union{T,Missing})
                     # copy data to a new column
                     col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_records), 1, col, 1, length(col))
                 else
@@ -379,16 +364,16 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     resize!(col, length(col) + n_new_records)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
-                fillcolumn!(col, n_new_records, mem, tokens, i, quot)
-                columns[i] = col
+                columns[i] = fillcolumn!(col, n_new_records, mem, tokens, i, quot)
             end
         end
         skip(stream, pos)
         if !chunking
             @assert eof(stream)
         end
-        fillbuffer(stream, eager = true)
     end
+
+    # Parse strings as date or datetime objects.
     for i in 1:ncols
         col = columns[i]
         if eltype(col) <: Union{String,Missing}
@@ -407,11 +392,18 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             end
         end
     end
+
     return DataFrame(columns, colnames)
 end
 
+function expandbuffer!(stream::TranscodingStream)
+    buffer = stream.state.buffer1
+    makemargin!(buffer, length(buffer) * 2)
+    return stream
+end
+
 # Count the number of lines in a memory block.
-function countlines(mem::Memory; byte::UInt8 = LF)
+function countbytes(mem::Memory, byte::UInt8)
     n = 0
     @inbounds @simd for i in 1:length(mem)
         n += mem[i] == byte
@@ -507,19 +499,21 @@ function find_first_newline(mem::Memory, i::Int)
     return i
 end
 
-# Buffer lines into memory and return the memory and the last newline position.
+# Buffer lines into memory and return the memory view and the last newline
+# position. The newline position is zero if no newlines are found.
 function bufferlines(stream::TranscodingStream)
+    # TODO: handle when a line is too long to store in the current buffer
     fillbuffer(stream, eager = true)
     buffer = stream.state.buffer1
     mem = buffermem(buffer)
     # find the last newline
-    nl = lastindex(mem)
-    while nl > 0
-        @inbounds x = mem[nl]
+    lastnl = lastindex(mem)
+    while lastnl > 0
+        @inbounds x = mem[lastnl]
         if x == LF
             break
         elseif x == CR
-            if nl != lastindex(mem)
+            if lastnl != lastindex(mem)
                 # CR
                 break
             end
@@ -527,19 +521,28 @@ function bufferlines(stream::TranscodingStream)
             makemargin!(buffer, 1)
             fillbuffer(stream, eager = true)
             mem = buffermem(buffer)
-            nl = lastindex(mem)
-            while nl > 0
-                @inbounds x = mem[nl]
+            lastnl = lastindex(mem)
+            while lastnl > 0
+                @inbounds x = mem[lastnl]
                 if x == LF || x == CR
                     break
                 end
-                nl -= 1
+                lastnl -= 1
             end
             break
         end
-        nl -= 1
+        lastnl -= 1
     end
-    return mem, nl
+    # TODO: Handle a situation where marginsize(buffer) == 0 and it is
+    # accidentally the EOF without trailing newlines.
+    if lastnl == 0 && TranscodingStreams.marginsize(buffer) > 0
+        # Terminate the buffered data with LF.
+        TranscodingStreams.writebyte!(buffer, LF)
+        mem = buffermem(buffer)
+        lastnl = lastindex(mem)
+        @assert mem[lastnl] == LF
+    end
+    return mem, lastnl
 end
 
 # Generated from tools/snoop.jl.
