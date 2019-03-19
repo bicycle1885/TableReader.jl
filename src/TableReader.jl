@@ -452,40 +452,6 @@ function skiplines(stream::TranscodingStream, skip::Int)
     end
 end
 
-# Read header and return column names.
-function readheader(stream::TranscodingStream, delim::UInt8, quot::UInt8, trim::Bool)
-    fillbuffer(stream, eager = true)
-    mem = buffermem(stream.state.buffer1)
-    nl = find_first_newline(mem, 1)
-    if nl == 0
-        # TODO: maybe, the header is too long to be stored in the memory buffer
-        return Symbol[]
-    end
-    n, tokens = scanheader(mem, 0, nl, delim, quot, trim)
-    skip(stream, n)
-    colnames = Symbol[]
-    for token in tokens
-        start, length = location(token)
-        if (kind(token) & QSTRING) != 0
-            name = qstring(mem, start, length, quot)
-        else
-            name = unsafe_string(mem.ptr + start - 1, length)
-        end
-        push!(colnames, Symbol(name))
-    end
-    return colnames
-end
-
-function rename_unnamed_columns!(colnames::Vector{Symbol})
-    for i in 1:length(colnames)
-        name = colnames[i]
-        if name == Symbol("")
-            colnames[i] = Symbol("UNNAMED_$(i)")
-        end
-    end
-    return colnames
-end
-
 function find_first_newline(mem::Memory, i::Int)
     last = lastindex(mem)
     @inbounds while i ≤ last
@@ -571,7 +537,6 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
-    precompile(Tuple{typeof(TableReader.readheader), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.readcsv), String})
     precompile(Tuple{typeof(TableReader.readtsv), String})
 end
