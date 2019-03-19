@@ -2,6 +2,20 @@ using TableReader
 using Dates
 using Test
 
+@testset "readdlm" begin
+    @testset "simple" begin
+        # delimtied by |
+        buffer = IOBuffer("""
+        col1|col2|col3
+        1|2|3
+        """)
+        df = readdlm(buffer, delim = '|')
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+    end
+end
+
 @testset "readtsv" begin
     @testset "simple" begin
         # empty

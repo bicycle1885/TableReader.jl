@@ -3,6 +3,7 @@ module TableReader
 export readdlm, readtsv, readcsv
 
 using Dates
+using Unicode: isletter
 using DataFrames:
     DataFrame
 using TranscodingStreams:
@@ -133,7 +134,7 @@ const LF = UInt8('\n')
 const CHARS_PRINT = ' ':'~'
 
 # Whitelist of delimiters
-const ALLOWED_DELIMITERS = tuple(['\t'; ' '; CHARS_PRINT[ispunct.(CHARS_PRINT)]]...)
+const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
 
 # A set of parser parameters.
 struct ParserParameters
