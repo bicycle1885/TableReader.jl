@@ -2,8 +2,12 @@ module TableReader
 
 export readdlm, readtsv, readcsv
 
-using Dates
-using Unicode: isletter
+using Dates:
+    Date,
+    DateTime,
+    @dateformat_str
+using Unicode:
+    isletter
 using DataFrames:
     DataFrame
 using TranscodingStreams:
