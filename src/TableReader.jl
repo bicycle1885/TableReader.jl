@@ -251,12 +251,9 @@ function checkformat(stream::IO)
 end
 
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
-    delim, quot, trim = params.delim, params.quot, params.trim
-    chunking = params.chunksize != 0
-    skiplines(stream, params.skip)
-    line = params.skip + 1
-
     # Determine column names
+    delim, quot, trim = params.delim, params.quot, params.trim
+    line = skiplines(stream, params.skip) + 1
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
     if params.colnames === nothing
@@ -357,9 +354,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 col = columns[i]
                 T = eltype(col)
                 if T <: Union{Int,Missing}
-                    (bitmaps[i] & INTEGER) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
+                    (bitmaps[i] & INTEGER) == 0 && throw_typeguess_error(i)
                 elseif T <: Union{Float64,Missing}
-                    (bitmaps[i] & FLOAT) == 0 && throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
+                    (bitmaps[i] & FLOAT) == 0 && throw_typeguess_error(i)
                 else
                     @assert T <: Union{String,Missing}
                 end
@@ -375,7 +372,8 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             end
         end
         skip(stream, pos)
-        if !chunking
+        if params.chunksize == 0
+            # Without chunking, reading data must finish in a pass.
             @assert eof(stream)
         end
     end
@@ -401,6 +399,10 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     end
 
     return DataFrame(columns, colnames)
+end
+
+function throw_typeguess_error(column::Int)
+    throw(ReadError("type guessing failed at column $(i); try larger chunksize or chunksize = 0 to disable chunking"))
 end
 
 function expandbuffer!(stream::TranscodingStream)
@@ -450,6 +452,7 @@ function skiplines(stream::TranscodingStream, skip::Int)
             n -= 1
         end
     end
+    return skip - n
 end
 
 function find_first_newline(mem::Memory, i::Int)
