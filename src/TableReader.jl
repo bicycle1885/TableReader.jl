@@ -288,9 +288,13 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     # Scan the next line to get the number of data columns
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
-    _, i = scanline!(Array{Token}(undef, (ncols + 1, 1)), 1, mem, 0, lastnl, line, delim, quot, trim)
-    if i == ncols
-        # ok
+    tokens = Array{Token}(undef, (ncols + 1, 1))
+    _, i = scanline!(tokens, 1, mem, 0, lastnl, line, delim, quot, trim)
+    if i == 1 && location(tokens[1,1])[2] == 0
+        # no data
+        return DataFrame([[] for _ in 1:length(colnames)], colnames)
+    elseif i == ncols
+        # the header and the first row have the same number of columns
     elseif i == ncols + 1
         # the first column is supposed to be unnamed
         ncols += 1

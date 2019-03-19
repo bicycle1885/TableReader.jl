@@ -4,6 +4,23 @@ using Test
 
 @testset "readtsv" begin
     @testset "simple" begin
+        # no data
+        buffer = IOBuffer("""
+        col1
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1]
+        @test size(df) == (0, 1)
+
+        buffer = IOBuffer("""
+        col1\tcol2\tcol3
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2, :col3]
+        @test size(df) == (0, 3)
+
         # integers
         buffer = IOBuffer("""
         col1\tcol2\tcol3
