@@ -39,7 +39,7 @@ const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .|
 const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]...)
 
 """
-    readdlm(filename or IO object;
+    readdlm(filename, command, or IO object;
             delim,
             quot = '"',
             trim = true,
@@ -48,6 +48,35 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             chunksize = 1 MiB)
 
 Read a character delimited text file.
+
+
+## Data source
+
+The first (and the only positional) argument specifies the source to read data
+from there.
+
+If the argument is a string, it is considered as a local file name or the URL
+of a remote file. If the name matches with "^\w+://" in regular expression, it
+is handled as a URL. For example, `"https://example.com/path/to/file.csv"` is
+regarded as a URL and its content is streamed using the `curl` command.
+
+If the argument is a command object, it is considered as a source whose
+standard output is text data to read. For example, `unzip -p path/to/file.zip
+somefile.csv` can be used to extract a file from a zipped archive. It is also
+possible to pipeline several commands using `pipeline`.
+
+If the arguments is an object of the `IO` type, it is considered as a direct
+data source. The content is read using `read` or other similar functions. For
+example, passing `IOBuffer(text)` makes it possible to read data from the raw
+text object.
+
+The data source is transparently decompressed if the compression format is
+detectable. Currently, gzip, zstd, and xz are supported. The format is detected
+by the magic bytes of the stream header, and therefore other information such
+as file names does not affect the detection.
+
+
+## Parser parameters
 
 `delim` specifies the field delimiter in a line.  This cannot be the same
 character as `quot`.  Currently, the following delimiters are allowed:
@@ -64,12 +93,27 @@ If `trim` is true, `delim` and `quot` cannot be a space character.
 line just after the skipped lines is considered as a header line if the
 `header` parameter is not specified.
 
+
+## Column names
+
 `header` specifies the column names. If `header` is `nothing` (default), the
 column names are read from the first line of the text file. Any iterable object
 is allowed.
 
 If unnamed columns are found in the header, they are renamed to `UNNAMED_{j}`
-for ease of access, where `{j}` is replaced by the column number.
+for ease of access, where `{j}` is replaced by the column number. If the number
+of header columns in a file is less than the number of data columns by one, a
+column name `UNNAMED_0` will be inserted into the column names as the first
+column.  This is useful to read files written by the `write.table` function of
+R with `row.names = TRUE`.
+
+
+## Text reading behavior
+
+The only supported text encoding of a file is UTF-8, which is the default
+character encoding scheme of many functions in Julia.  If you need to read text
+encoded other than UTF-8, it is required to wrap the data stream with an
+encoding conversion tool such as the `iconv` command or StringEncodings.jl.
 
 A text file will be read chunk by chunk to save memory. The chunk size is
 specified by the `chunksize` parameter, which is set to 1 MiB by default.  The
@@ -82,7 +126,7 @@ function readdlm end
 """
     readtsv(filename or IO object; delim = '\\t', <keyword arguments>)
 
-Read a TSV text file.
+Read a TSV (tab-separated values) text file.
 
 This function is the same as [`readdlm`](@ref) but with `delim = '\\t'`.
 See `readdlm` for details.
@@ -92,9 +136,10 @@ function readtsv end
 """
     readcsv(filename or IO object; delim = ',', <keyword arguments>)
 
-Read a CSV text file.
+Read a CSV (comma-separated values) text file.
 
 This function is the same as [`readdlm`](@ref) but with `delim = ','`.
+See `readdlm` for details.
 """
 function readcsv end
 
