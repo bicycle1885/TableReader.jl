@@ -344,8 +344,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             resize!(columns, ncols)
             for i in 1:ncols
                 T = (bitmaps[i] & INTEGER) != 0 ? Int :
-                    (bitmaps[i] & FLOAT) != 0 ? Float64 : String
-                if (bitmaps[i] & 0b1000) != 0
+                    (bitmaps[i] & FLOAT) != 0 ? Float64 :
+                    (bitmaps[i] & BOOL) != 0 ? Bool : String
+                if (bitmaps[i] & 0b10000) != 0
                     T = Union{T,Missing}
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
@@ -362,10 +363,12 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     (bitmaps[i] & INTEGER) == 0 && throw_typeguess_error(i)
                 elseif T <: Union{Float64,Missing}
                     (bitmaps[i] & FLOAT) == 0 && throw_typeguess_error(i)
+                elseif T <: Union{Bool,Missing}
+                    (bitmaps[i] & BOOL) == 0 && throw_typeguess_error(i)
                 else
                     @assert T <: Union{String,Missing}
                 end
-                if (bitmaps[i] & 0b1000) != 0 && !(T >: Union{T,Missing})
+                if (bitmaps[i] & 0b10000) != 0 && !(T >: Union{T,Missing})
                     # copy data to a new column
                     col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_records), 1, col, 1, length(col))
                 else
@@ -428,12 +431,12 @@ end
 function aggregate_columns(tokens::Matrix{Token}, nrows::Int)
     ncols = size(tokens, 1)
     bitmaps = Vector{UInt8}(undef, ncols)
-    fill!(bitmaps, 0b0111)
+    fill!(bitmaps, 0b1111)
     @inbounds for j in 1:nrows, i in 1:ncols
         # Note that the tokens matrix is transposed.
         x = kind(tokens[i,j])
         y = bitmaps[i]
-        bitmaps[i] = ((x | y) & 0b1000) | ((x & y) & 0b0111)
+        bitmaps[i] = ((y & 0b10000) | ifelse(x == 0b1111, 0b10000, 0b00000)) | ((x & y) & 0b1111)
     end
     return bitmaps
 end

@@ -131,7 +131,22 @@ end
 end
 
 
+function fillcolumn!(col::Vector{Bool}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
+    @inbounds for i in 1:nvals
+        start, length = location(tokens[c,i])
+        col[end-nvals+i] = parse_bool(mem, start, length)
+    end
+    return col
+end
+
+@inline function parse_bool(mem::Memory, start::Int, length::Int)
+    c = mem[start] 
+    return (c == UInt8('f') || c == UInt8('F')) ? false : true
+end
+
+
 # String
+# ------
 
 const N_CACHED_STRINGS = 8
 

@@ -49,6 +49,22 @@ using Test
         @test df[:col2] == [1.1, 0.0, 0.123, 1e123]
         @test df[:col3] == [12.34, -9.0, 100.000, -8.2]
 
+        # bools
+        buffer = IOBuffer("""
+        col1\tcol2
+        true\tfalse
+        True\tFalse
+        TrUe\tFaLsE
+        TRUE\tFALSE
+        t\tf
+        T\tF
+        """)
+        df = readtsv(buffer)
+        @test eof(buffer)
+        @test names(df) == [:col1, :col2]
+        @test df[:col1] == [true, true, true, true, true, true]
+        @test df[:col2] == [false, false, false, false, false, false]
+
         # strings
         buffer = IOBuffer("""
         col1\tcol2\tcol3

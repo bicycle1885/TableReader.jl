@@ -8,8 +8,9 @@
 const STRING  = 0b0000
 const INTEGER = 0b0001
 const FLOAT   = 0b0010
-const QSTRING = 0b0100  # string with quotation marks
-const MISSING = 0b1011  # missing can be any data type
+const BOOL    = 0b0100
+const QSTRING = 0b1000  # string with quotation marks
+const MISSING = 0b1111  # missing can be any data type
 
 const MAX_TOKEN_START = 2^36
 const MAX_TOKEN_LENGTH = 2^24
@@ -357,10 +358,6 @@ function scanline!(
             @goto STRING
         elseif c == UInt8('.')
             @goto DOT
-        elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")  # case-insensitive
-            # NaN
-            pos += 2  # for 'A' and 'N'
-            @goto SPECIAL_FLOAT
         elseif c == UInt8('I') || c == UInt8('i')
             # Infinity
             if @follows("NFINITY")
@@ -371,6 +368,22 @@ function scanline!(
                 @goto SPECIAL_FLOAT
             end
             @goto STRING
+        elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")  # case-insensitive
+            # NaN
+            pos += 2  # for 'A' and 'N'
+            @goto SPECIAL_FLOAT
+        elseif c == UInt8('F') || c == UInt8('f')
+            if @follows("alse")
+                pos += 4
+                @goto BOOL
+            end
+            @goto BOOL
+        elseif c == UInt8('T') || c == UInt8('t')
+            if @follows("rue")
+                pos += 3
+                @goto BOOL
+            end
+            @goto BOOL
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
@@ -693,6 +706,55 @@ function scanline!(
         elseif c == LF
             @goto LF
         elseif c == CR
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state BOOL begin
+        if quoted && c == quot
+            @recordtoken BOOL
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken BOOL
+            @endtoken
+            @goto BEGIN
+        elseif c == SP
+            if trim && !quoted
+                @recordtoken BOOL
+                @goto BOOL_SPACE
+            end
+            @goto STRING
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == LF
+            @recordtoken BOOL
+            @goto LF
+        elseif c == CR
+            @recordtoken BOOL
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state BOOL_SPACE begin
+        if c == SP
+            @goto BOOL_SPACE
+        elseif c == delim
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == LF
+            @recordtoken BOOL
+            @goto LF
+        elseif c == CR
+            @recordtoken BOOL
             @goto CR
         else
             @multibytestring
