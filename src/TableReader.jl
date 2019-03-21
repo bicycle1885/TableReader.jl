@@ -321,25 +321,25 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         mem, lastnl = bufferlines(stream)
         @assert lastnl > 0
         pos = 0
-        chunk_begin = line
-        while pos < lastnl && line - chunk_begin + 1 ≤ n_chunk_rows
-            pos, i = scanline!(tokens, line - chunk_begin + 1, mem, pos, lastnl, line, delim, quot, trim)
+        n_new_rows = 0
+        while pos < lastnl && n_new_rows < n_chunk_rows
+            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, lastnl, line, delim, quot, trim)
             if pos == 0
                 break
             elseif i != ncols
                 throw(ReadError("unexpected number of columns at line $(line)"))
             end
+            n_new_rows += 1
             line += 1
         end
-        n_new_records = line - chunk_begin
-        if n_new_records == 0
+        if n_new_rows == 0
             # the buffer is too short (TODO: or no records?)
             expandbuffer!(stream)
             continue
         end
 
         # Parse data.
-        bitmaps = aggregate_columns(tokens, n_new_records)
+        bitmaps = aggregate_columns(tokens, n_new_rows)
         if isempty(columns)
             # infer data types of columns
             resize!(columns, ncols)
@@ -352,8 +352,8 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(
-                    Vector{T}(undef, n_new_records),
-                    n_new_records, mem, tokens, i, quot)
+                    Vector{T}(undef, n_new_rows),
+                    n_new_rows, mem, tokens, i, quot)
             end
         else
             # check existing columns
@@ -371,13 +371,13 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 end
                 if (bitmaps[i] & 0b10000) != 0 && !(T >: Union{T,Missing})
                     # copy data to a new column
-                    col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_records), 1, col, 1, length(col))
+                    col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_rows), 1, col, 1, length(col))
                 else
                     # resize the column for new records
-                    resize!(col, length(col) + n_new_records)
+                    resize!(col, length(col) + n_new_rows)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
-                columns[i] = fillcolumn!(col, n_new_records, mem, tokens, i, quot)
+                columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, quot)
             end
         end
         skip(stream, pos)
