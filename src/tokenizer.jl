@@ -785,7 +785,11 @@ function scanline!(
             @endtoken
             @goto BEGIN
         elseif c == SP
-            @goto NA_SPACE
+            if trim && !quoted
+                @recordtoken MISSING
+                @goto NA_SPACE
+            end
+            @goto STRING
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
