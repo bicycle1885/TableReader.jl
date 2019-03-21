@@ -141,7 +141,13 @@ A text file will be read chunk by chunk to save memory. The chunk size is
 specified by the `chunksize` parameter, which is set to 1 MiB by default.  The
 data type of each column is guessed from the values in the first chunk.  If
 `chunksize` is set to zero, it disables chunking and the data types are guessed
-from all rows.
+from all rows. The chunk size will be automatically expanded when it is
+required to store long lines.
+
+A chunk cannot be larger than 64 GiB and a field cannot be longer than 16 MiB.
+These limits are due to the encoding method of tokens used by the tokenizer.
+Therefore, you cannot parse data larger than 64 GiB without chunking and fields
+longer than 16 MiB. Trying to read such a file will result in error.
 """
 function readdlm end
 
@@ -270,7 +276,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         line += skipblanlines(stream, params.trim)
     end
     mem, lastnl = bufferlines(stream)
-    @assert lastnl > 0
     if params.colnames === nothing
         # Scan the header line to get the column names
         n, headertokens = scanheader(mem, lastnl, params)
@@ -302,7 +307,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         line += skipblanlines(stream, params.trim)
     end
     mem, lastnl = bufferlines(stream)
-    @assert lastnl > 0
     tokens = Array{Token}(undef, (ncols + 1, 1))
     _, i = scanline!(tokens, 1, mem, 0, lastnl, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
@@ -331,7 +335,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     while !eof(stream)
         # Tokenize data.
         mem, lastnl = bufferlines(stream)
-        @assert lastnl > 0
         pos = 0
         n_new_rows = 0
         while pos < lastnl && n_new_rows < n_chunk_rows
@@ -349,8 +352,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             line += 1
         end
         if n_new_rows == 0
-            # the buffer is too short (TODO: or no records?)
-            expandbuffer!(stream)
+            # only blank lines
             continue
         end
 
@@ -430,12 +432,6 @@ function throw_typeguess_error(column::Int)
     throw(ReadError("type guessing failed at column $(column); try larger chunksize or chunksize = 0 to disable chunking"))
 end
 
-function expandbuffer!(stream::TranscodingStream)
-    buffer = stream.state.buffer1
-    makemargin!(buffer, length(buffer) * 2)
-    return stream
-end
-
 # Count the number of lines in a memory block.
 function countbytes(mem::Memory, byte::UInt8)
     n = 0
@@ -460,24 +456,27 @@ end
 
 # Skip the number of lines specified by `skip`.
 function skiplines(stream::TranscodingStream, skip::Int)
-    buffer = stream.state.buffer1
-    n = skip
-    while n > 0
-        fillbuffer(stream, eager = true)
-        mem = buffermem(buffer)
-        nl = find_first_newline(mem, 1)
-        if nl == 0  # no newline
-            if eof(stream)
+    skipped = 0
+    while skipped < skip && !eof(stream)
+        mem, lastnl = bufferlines(stream)
+        # find the first newline
+        i = 1
+        while i ≤ lastnl
+            @inbounds x = mem[i]
+            if x == CR
+                if i + 1 ≤ lastindex(mem) && mem[i+1] == LF
+                    i += 1
+                end
+                break
+            elseif x == LF
                 break
             end
-            # expand buffer
-            makemargin!(buffer, length(buffer) * 2)
-        else
-            Base.skip(stream, nl)
-            n -= 1
+            i += 1
         end
+        Base.skip(stream, i)
+        skipped += 1
     end
-    return skip - n
+    return skipped
 end
 
 # Skip blank lines.
@@ -505,69 +504,54 @@ function skipblanlines(stream::TranscodingStream, trim::Bool)
     return skipped
 end
 
-function find_first_newline(mem::Memory, i::Int)
-    last = lastindex(mem)
-    @inbounds while i ≤ last
-        x = mem[i]
-        if x == CR
-            if i + 1 ≤ last && mem[i+1] == LF
-                i += 1
-            end
-            break
-        elseif x == LF
-            break
-        end
-        i += 1
-    end
-    if i > last
-        return 0
-    end
-    return i
-end
-
-# Buffer lines into memory and return the memory view and the last newline
-# position. The newline position is zero if no newlines are found.
+# Buffer lines and return the memory view and the last newline position.
 function bufferlines(stream::TranscodingStream)
-    # TODO: handle when a line is too long to store in the current buffer
+    # try to find the last newline (LF, CR, or CR+LF)
+    @label SEARCH_NEWLINE
     fillbuffer(stream, eager = true)
     buffer = stream.state.buffer1
     mem = buffermem(buffer)
-    # find the last newline
     lastnl = lastindex(mem)
     while lastnl > 0
         @inbounds x = mem[lastnl]
         if x == LF
             break
         elseif x == CR
-            if lastnl != lastindex(mem)
-                # CR
-                break
-            end
-            # CR or CR+LF
-            makemargin!(buffer, 1)
-            fillbuffer(stream, eager = true)
-            mem = buffermem(buffer)
-            lastnl = lastindex(mem)
-            while lastnl > 0
-                @inbounds x = mem[lastnl]
-                if x == LF || x == CR
-                    break
+            if lastnl == lastindex(mem)  # cannot determine CR or CR+LF
+                makemargin!(buffer, 1)
+                fillbuffer(stream, eager = true)
+                mem = buffermem(buffer)
+                lastnl = lastindex(mem)
+                while lastnl > 0
+                    @inbounds x = mem[lastnl]
+                    if x == LF || x == CR
+                        break
+                    end
+                    lastnl -= 1
                 end
-                lastnl -= 1
             end
             break
         end
         lastnl -= 1
     end
-    # TODO: Handle a situation where marginsize(buffer) == 0 and it is
-    # accidentally the EOF without trailing newlines.
-    if lastnl == 0 && TranscodingStreams.marginsize(buffer) > 0
-        # Terminate the buffered data with LF.
-        TranscodingStreams.writebyte!(buffer, LF)
-        mem = buffermem(buffer)
-        lastnl = lastindex(mem)
-        @assert mem[lastnl] == LF
+    if lastnl == 0  # found no newlines in the buffered chunk
+        if TranscodingStreams.marginsize(buffer) == 0
+            # No newlines in the current buffer but newlines may be in the next.
+            bufsize = length(buffer)
+            if bufsize ≥ MAX_TOKEN_START
+                throw(ReadError("found a too long line to store in a chunk"))
+            end
+            newbufsize = min(bufsize * 2, MAX_TOKEN_START)
+            TranscodingStreams.makemargin!(buffer, newbufsize - bufsize)
+            @goto SEARCH_NEWLINE
+        else
+            # Found EOF without newlines; terminate the buffered data with LF.
+            TranscodingStreams.writebyte!(buffer, LF)
+            mem = buffermem(buffer)
+            lastnl = lastindex(mem)
+        end
     end
+    @assert lastnl > 0 && (mem[lastnl] == CR || mem[lastnl] == LF)
     return mem, lastnl
 end
 
@@ -580,7 +564,7 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.Process}})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
-    precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
+    #precompile(Tuple{typeof(TableReader.find_first_newline), TranscodingStreams.Memory, Int64})
     precompile(Tuple{typeof(TableReader.parse_date), Array{Union{Base.Missing, String}, 1}})
     precompile(Tuple{typeof(TableReader.bufferlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.throw_typeguess_error), Int64})

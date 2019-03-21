@@ -26,8 +26,8 @@ struct ParserParameters
             throw(ArgumentError("skip cannot be negative"))
         elseif chunksize < 0
             throw(ArgumentError("chunk size cannot be negative"))
-        elseif chunksize ≥ MAX_TOKEN_START
-            throw(ArgumentError("chunk size must be less than $(MAX_TOKEN_START)"))
+        elseif chunksize > MAX_TOKEN_START
+            throw(ArgumentError("chunk size must be smaller than or equal to $(MAX_TOKEN_START)"))
         end
         if colnames != nothing
             colnames = Symbol.(collect(colnames))
@@ -56,8 +56,8 @@ const BOOL    = 0b0100
 const QSTRING = 0b1000  # string with quotation marks
 const MISSING = 0b1111  # missing can be any data type
 
-const MAX_TOKEN_START = 2^36
-const MAX_TOKEN_LENGTH = 2^24
+const MAX_TOKEN_START = 2^36 - 1
+const MAX_TOKEN_LENGTH = 2^24 - 1
 
 struct Token
     # From most significant
@@ -67,8 +67,8 @@ struct Token
     value::UInt64
 
     function Token(kind::UInt8, start::Int, len::Int)
-        @assert start < MAX_TOKEN_START
-        @assert len < MAX_TOKEN_LENGTH
+        @assert start ≤ MAX_TOKEN_START
+        @assert len ≤ MAX_TOKEN_LENGTH
         return new((UInt64(kind) << 60) | (UInt64(start) << 24) | UInt64(len))
     end
 end
