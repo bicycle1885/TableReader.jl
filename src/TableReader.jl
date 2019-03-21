@@ -52,7 +52,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             quot = '"',
             trim = true,
             skip = 0,
-            header = nothing,
+            colnames = nothing,
             chunksize = 1 MiB)
 
 Read a character delimited text file.
@@ -103,14 +103,15 @@ If `trim` is true, `delim` and `quot` cannot be a space character.
 
 `skip` specifies the number of lines to skip before reading data.  The next
 line just after the skipped lines is considered as a header line if the
-`header` parameter is not specified.
+`colnames` parameter is not specified.
 
 
 ## Column names
 
-`header` specifies the column names. If `header` is `nothing` (default), the
-column names are read from the first line of the text file. Any iterable object
-is allowed.
+`colnames` specifies the column names. If `colnames` is `nothing` (default),
+the column names are read from the first line just after skipping lines
+specified by `skip` (no lines are skipped by default). Any iterable object is
+allowed.
 
 If unnamed columns are found in the header, they are renamed to `UNNAMED_{j}`
 for ease of access, where `{j}` is replaced by the column number. If the number
@@ -171,13 +172,13 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
-    push!(kwargs, Expr(:kw, :(header), nothing))  # header = nothing
+    push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -190,12 +191,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, header, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end

@@ -505,7 +505,7 @@ end
         1,2,3
         4,5,6
         """
-        df = readcsv(IOBuffer(data), header = ["col1", "col2", "col3"])
+        df = readcsv(IOBuffer(data), colnames = ["col1", "col2", "col3"])
         @test df[:col1] == [1, 4]
         @test df[:col2] == [2, 5]
         @test df[:col3] == [3, 6]

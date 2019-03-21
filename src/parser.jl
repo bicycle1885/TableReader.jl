@@ -10,7 +10,7 @@ struct ParserParameters
     colnames::Union{Vector{Symbol},Nothing}
     chunksize::Int
 
-    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, header::Any, chunksize::Integer)
+    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, colnames::Any, chunksize::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -28,10 +28,8 @@ struct ParserParameters
         elseif chunksize ≥ MAX_TOKEN_START
             throw(ArgumentError("chunk size must be less than $(MAX_TOKEN_START)"))
         end
-        if header != nothing
-            colnames = Symbol.(collect(header))
-        else
-            colnames = nothing
+        if colnames != nothing
+            colnames = Symbol.(collect(colnames))
         end
         return new(
             UInt8(delim),
