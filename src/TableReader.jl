@@ -261,18 +261,19 @@ function checkformat(stream::IO)
     end
 end
 
+# The main function of parsing a character delimited file.
+# `stream` is asuumed to be an input stream of plain text.
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     # Determine column names
-    delim, quot, trim = params.delim, params.quot, params.trim
     line = skiplines(stream, params.skip) + 1
     if params.skipblank
-        line += skipblanlines(stream, trim)
+        line += skipblanlines(stream, params.trim)
     end
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
     if params.colnames === nothing
         # Scan the header line to get the column names
-        n, headertokens = scanheader(mem, 0, lastnl, delim, quot, trim)
+        n, headertokens = scanheader(mem, lastnl, params)
         skip(stream, n)
         if length(headertokens) == 1 && location(headertokens[1])[2] == 0  # zero-length token
             throw(ReadError("found no column names in the header at line $(line)"))
@@ -282,7 +283,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         for (i, token) in enumerate(headertokens)
             start, length = location(token)
             if (kind(token) & QSTRING) != 0
-                name = qstring(mem, start, length, quot)
+                name = qstring(mem, start, length, params.quot)
             else
                 name = unsafe_string(mem.ptr + start - 1, length)
             end
@@ -298,12 +299,12 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
 
     # Scan the next line to get the number of data columns
     if params.skipblank
-        line += skipblanlines(stream, trim)
+        line += skipblanlines(stream, params.trim)
     end
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
     tokens = Array{Token}(undef, (ncols + 1, 1))
-    _, i = scanline!(tokens, 1, mem, 0, lastnl, line, delim, quot, trim)
+    _, i = scanline!(tokens, 1, mem, 0, lastnl, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
         return DataFrame([[] for _ in 1:length(colnames)], colnames)
@@ -334,7 +335,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         pos = 0
         n_new_rows = 0
         while pos < lastnl && n_new_rows < n_chunk_rows
-            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, lastnl, line, delim, quot, trim)
+            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, lastnl, line, params)
             if pos == 0
                 break
             elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
@@ -368,7 +369,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(
                     Vector{T}(undef, n_new_rows),
-                    n_new_rows, mem, tokens, i, quot)
+                    n_new_rows, mem, tokens, i, params.quot)
             end
         else
             # check existing columns
@@ -392,7 +393,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     resize!(col, length(col) + n_new_rows)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
-                columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, quot)
+                columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
             end
         end
         skip(stream, pos)
@@ -573,8 +574,8 @@ end
 # Generated from tools/snoop.jl.
 function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
-    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, UInt8, UInt8, Bool})
-    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
+    #precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, UInt8, UInt8, Bool})
+    #precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, Int64, UInt8, UInt8, Bool})
     precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.Process}})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})

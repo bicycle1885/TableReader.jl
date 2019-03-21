@@ -1,50 +1,6 @@
 # Parser
 # ======
 
-# A set of parser parameters.
-struct ParserParameters
-    delim::UInt8
-    quot::UInt8
-    trim::Bool
-    skip::Int
-    skipblank::Bool
-    colnames::Union{Vector{Symbol},Nothing}
-    chunksize::Int
-
-    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, skipblank::Bool, colnames::Any, chunksize::Integer)
-        if delim ∉ ALLOWED_DELIMITERS
-            throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
-        elseif quot ∉ ALLOWED_QUOTECHARS
-            throw(ArgumentError("quotation character $(repr(quot)) is not allowed"))
-        elseif delim == quot
-            throw(ArgumentError("delimiter and quotation character cannot be the same character"))
-        elseif delim == ' ' && trim
-            throw(ArgumentError("delimiting with space and space trimming are exclusive"))
-        elseif quot == ' ' && trim
-            throw(ArgumentError("quoting with space and space trimming are exclusive"))
-        elseif skip < 0
-            throw(ArgumentError("skip cannot be negative"))
-        elseif chunksize < 0
-            throw(ArgumentError("chunk size cannot be negative"))
-        elseif chunksize ≥ MAX_TOKEN_START
-            throw(ArgumentError("chunk size must be less than $(MAX_TOKEN_START)"))
-        end
-        if colnames != nothing
-            colnames = Symbol.(collect(colnames))
-        end
-        return new(
-            UInt8(delim),
-            UInt8(quot),
-            trim,
-            skip,
-            skipblank,
-            colnames,
-            chunksize,
-        )
-    end
-end
-
-
 # Integer
 # -------
 
