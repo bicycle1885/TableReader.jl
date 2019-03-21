@@ -44,6 +44,10 @@ function location(token::Token)
     return (x >> 24) % Int, (x & (~UInt64(0) >> 40)) % Int
 end
 
+function Base.length(token::Token)
+    return (token.value & (~UInt64(0) >> 40)) % Int
+end
+
 
 # Line scanner
 # ------------

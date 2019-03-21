@@ -7,10 +7,11 @@ struct ParserParameters
     quot::UInt8
     trim::Bool
     skip::Int
+    skipblank::Bool
     colnames::Union{Vector{Symbol},Nothing}
     chunksize::Int
 
-    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, colnames::Any, chunksize::Integer)
+    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, skipblank::Bool, colnames::Any, chunksize::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -36,6 +37,7 @@ struct ParserParameters
             UInt8(quot),
             trim,
             skip,
+            skipblank,
             colnames,
             chunksize,
         )

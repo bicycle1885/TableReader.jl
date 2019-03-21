@@ -400,6 +400,56 @@ using Test
         @test df[:col2] == [456]
     end
 
+    @testset "blank lines" begin
+        # before header
+        data = """
+
+
+        col1\tcol2
+        1\t2
+        3\t4
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, 3]
+        @test df[:col2] == [2, 4]
+
+        # after header
+        data = """
+        col1\tcol2
+
+
+        1\t2
+        3\t4
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, 3]
+        @test df[:col2] == [2, 4]
+
+        # among data
+        data = """
+        col1\tcol2
+        1\t2
+
+
+        3\t4
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, 3]
+        @test df[:col2] == [2, 4]
+
+        # end of a file
+        data = """
+        col1\tcol2
+        1\t2
+        3\t4
+
+
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[:col1] == [1, 3]
+        @test df[:col2] == [2, 4]
+    end
+
     @testset "invalid argument" begin
         @test_throws ArgumentError readtsv(IOBuffer(""), chunksize = -1)
     end

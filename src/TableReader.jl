@@ -52,6 +52,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             quot = '"',
             trim = true,
             skip = 0,
+            skipblank = true,
             colnames = nothing,
             chunksize = 1 MiB)
 
@@ -104,6 +105,9 @@ If `trim` is true, `delim` and `quot` cannot be a space character.
 `skip` specifies the number of lines to skip before reading data.  The next
 line just after the skipped lines is considered as a header line if the
 `colnames` parameter is not specified.
+
+`skipblank` specifies whether the parser ignores blank lines. If `skipblank` is
+false, encountering a blank line throws an exception.
 
 
 ## Column names
@@ -172,13 +176,14 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
+    push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -191,12 +196,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -260,6 +265,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     # Determine column names
     delim, quot, trim = params.delim, params.quot, params.trim
     line = skiplines(stream, params.skip) + 1
+    if params.skipblank
+        line += skipblanlines(stream, trim)
+    end
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
     if params.colnames === nothing
@@ -289,6 +297,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     ncols = length(colnames)
 
     # Scan the next line to get the number of data columns
+    if params.skipblank
+        line += skipblanlines(stream, trim)
+    end
     mem, lastnl = bufferlines(stream)
     @assert lastnl > 0
     tokens = Array{Token}(undef, (ncols + 1, 1))
@@ -326,8 +337,12 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, lastnl, line, delim, quot, trim)
             if pos == 0
                 break
+            elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
+                line += 1
+                continue
             elseif i != ncols
                 throw(ReadError("unexpected number of columns at line $(line)"))
+            else
             end
             n_new_rows += 1
             line += 1
@@ -462,6 +477,31 @@ function skiplines(stream::TranscodingStream, skip::Int)
         end
     end
     return skip - n
+end
+
+# Skip blank lines.
+function skipblanlines(stream::TranscodingStream, trim::Bool)
+    skipped = 0
+    while !eof(stream)
+        mem, lastnl = bufferlines(stream)
+        @assert lastnl > 0
+        i = 1
+        if trim
+            while i ≤ lastindex(mem) && mem[i] == SP
+                i += 1
+            end
+        end
+        if i + 1 ≤ lastindex(mem) && mem[i] == CR && mem[i+1] == LF
+            skip(stream, i + 1)
+        elseif i ≤ lastindex(mem) && (mem[i] == CR || mem[i] == LF)
+            skip(stream, i)
+        else
+            # found a non-blank line
+            break
+        end
+        skipped += 1
+    end
+    return skipped
 end
 
 function find_first_newline(mem::Memory, i::Int)
