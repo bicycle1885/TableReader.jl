@@ -96,14 +96,19 @@ macro multibytestring()
     end |> esc
 end
 
-macro follows(s)
+macro follows(s, opts...)
     @assert s isa String && isascii(s)
+    casesensitive = :casesensitive ∈ opts
     i = 0
     foldl(s, init = :(pos + $(sizeof(s)) ≤ pos_end)) do ex, c
-        up = UInt8(uppercase(c))
-        lo = UInt8(lowercase(c))
         i += 1
-        :($(ex) && (mem[pos+$(i)] == $(up) || mem[pos+$(i)] == $(lo)))
+        if casesensitive
+            :($(ex) && mem[pos+$(i)] == $(UInt8(c)))
+        else
+            up = UInt8(uppercase(c))
+            lo = UInt8(lowercase(c))
+            :($(ex) && (mem[pos+$(i)] == $(up) || mem[pos+$(i)] == $(lo)))
+        end
     end |> esc
 end
 
@@ -368,10 +373,17 @@ function scanline!(
                 @goto SPECIAL_FLOAT
             end
             @goto STRING
-        elseif (c == UInt8('N') || c == UInt8('n')) && @follows("AN")  # case-insensitive
-            # NaN
-            pos += 2  # for 'A' and 'N'
-            @goto SPECIAL_FLOAT
+        elseif (c == UInt8('N') || c == UInt8('n'))
+            if @follows("AN")  # case-insensitive
+                # NaN
+                pos += 2  # for 'A' and 'N'
+                @goto SPECIAL_FLOAT
+            elseif c == UInt8('N') && @follows("A", casesensitive)
+                # NA
+                pos += 1  # for 'A'
+                @goto NA
+            end
+            @goto STRING
         elseif c == UInt8('F') || c == UInt8('f')
             if @follows("alse")
                 pos += 4
@@ -755,6 +767,51 @@ function scanline!(
             @goto LF
         elseif c == CR
             @recordtoken BOOL
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state NA begin
+        if quoted && c == quot
+            @recordtoken MISSING
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken MISSING
+            @endtoken
+            @goto BEGIN
+        elseif c == SP
+            @goto NA_SPACE
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == LF
+            @recordtoken MISSING
+            @goto LF
+        elseif c == CR
+            @recordtoken MISSING
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state NA_SPACE begin
+        if c == SP
+            @goto NA_SPACE
+        elseif c == delim
+            @endtoken
+            @goto BEGIN
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == LF
+            @recordtoken MISSING
+            @goto LF
+        elseif c == CR
+            @recordtoken MISSING
             @goto CR
         else
             @multibytestring

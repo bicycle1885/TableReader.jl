@@ -276,6 +276,41 @@ using Test
         @test df[2,:col2] == "qux"
         @test df[1,:col3] == "bar"
         @test ismissing(df[2,:col3])
+
+        # NA
+        data = """
+        col1\tcol2
+        1\t2
+        NA\tNA
+        "NA"\t"NA"
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[1,:col1] == 1
+        @test ismissing(df[2,:col1])
+        @test ismissing(df[3,:col1])
+        @test df[1,:col2] == 2
+        @test ismissing(df[2,:col2])
+        @test ismissing(df[3,:col2])
+    end
+
+    @testset "NA" begin
+        # NA is case-sensitive.
+        data = """
+        col1\tcol2
+        na\tNa
+        NA\tNA
+        "Na"\t"nA"
+        "NA"\t"NA"
+        """
+        df = readtsv(IOBuffer(data))
+        @test df[1,:col1] == "na"
+        @test ismissing(df[2,:col1])
+        @test df[3,:col1] == "Na"
+        @test ismissing(df[4,:col1])
+        @test df[1,:col2] == "Na"
+        @test ismissing(df[2,:col2])
+        @test df[3,:col2] == "nA"
+        @test ismissing(df[4,:col2])
     end
 
     @testset "large integer" begin
