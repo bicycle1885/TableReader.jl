@@ -111,18 +111,21 @@ dataframe = readcsv("https://example.com/somefile.csv")
 dataframe = readcsv(`unzip -p data.zip somefile.csv`)
 ```
 
+See the docstring of `readdlm` for more details.
+
 
 ## Design notes
 
-TableReader.jl is aimed at users who want to keep the easy things easy.  Thus,
-it exports a simple function, `readdlm`, that reads a tabular text file into a
-dataframe.  For ease of use, `readcsv` and `readtsv` functions, thin wrapper
-functions around `readdlm` with sensible default parameters, are also exported.
-These two functions are for CSV and TSV file formats, respectively. No other
-functions except the three are exported from this package.
+TableReader.jl is aimed at users who want to keep the easy things easy.  It
+exports three functions: `readdlm`, `readcsv`, and `readtsv`. `readdlm` is at
+the core of the package, and the other two functions are a thin wrapper that
+calls `readdlm` with some default parameters; `readcsv` is for CSV files and
+`readtsv` is for TSV files. These functions returns a data frame of
+DataFrames.jl. No other functions except the three are exported from this
+package.
 
-The three functions takes an object as the source of tabular data. The source
-object may be a filename, an URL string, a command, or any I/O object. For
+The three functions takes an object as the source of tabular data to read. It
+may be a filename, a URL string, a command, or any kind of I/O objects.  For
 example, the following examples will work as you expect:
 
 ```julia
@@ -132,18 +135,18 @@ readcsv(`unzip -p path/to/dataset.zip filename.csv`)
 readcsv(IOBuffer(some_csv_data))
 ```
 
-In addition, these functions guess the file format from the magic bytes if any.
+In addition, the functions guess the file format from the magic bytes if any.
 Currently, plain text, gzip, xz, and zstd are detectable. These file formats
 are transparently decompressed if required and thus the user does not need to
 decompress a file in advance.
 
 Column data types are guessed from the data. Currently, integers (`Int`),
-floating-point numbers (`Float64`), dates (`Date`), datetimes (`DateTime`), and
-strings (`String`) are supported. If empty cells (i.e., two consective
-delimiters, or a delimiter and a newline) are found, they are interpreted as
-missing values. Such a column is converted to a vector of
-`Vector{Union{T,Missing}}`, where `T` refers to a data type guessed from
-non-missing values.
+floating-point numbers (`Float64`), boolean values (`Bool`), dates (`Date`),
+datetimes (`DateTime`), missing values (`Missing`), and strings (`String`) are
+supported. If empty fields (i.e., two consective delimiters, or a delimiter and
+a newline) or "NA" are found, they are interpreted as missing values. Such a
+column is converted to a vector of `Vector{Union{T,Missing}}`, where `T` refers
+to a data type guessed from non-missing values.
 
 To reduce memory usage, the parser of this package reads data chunk by chunk.
 The default chunk size is 1 MiB, and data types are guessed using the bufferred
@@ -154,14 +157,14 @@ in the first chunk and type guessing may fail. Consequently, parsing will also
 fail when the parser sees the first occurrence.  To avoid the problem, you can
 turn off the chunking behavior by setting the `chunksize` parameter to zero.
 For example, `readcsv("somefile.csv", chunksize = 0)` will read the whole file
-into memory as a single large chunk and column types are guessed from all of
-the cells.  While this requires more memories, you will never see parsing error
-due to the failure of type guessing.
+into memory as a single large chunk and the data types of columns are guessed
+from all of the fields.  While this requires more memories, you will never see
+parsing error due to the failure of type guessing.
 
 
 ## Limitations
 
-The tokenizer cannot handle extremely long cells in a data file. The length of
+The tokenizer cannot handle extremely long fields in a data file. The length of
 a token is encoded using 24-bit integer, and therefore a cell that is longer
 than or equal to 16 MiB will result in parsing failure. This is not likely to
 happen, but please be careful if, for example, a column contains long strings.
