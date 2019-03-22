@@ -406,7 +406,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 if T <: S
                     resize!(col, n_rows + n_new_rows)
                 else
-                    col = copyto!(Vector{Union{S,T}}(undef, n_rows + n_new_rows), 1, col, n_rows)
+                    col = copyto!(Vector{Union{S,T}}(undef, n_rows + n_new_rows), 1, col, 1, n_rows)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
