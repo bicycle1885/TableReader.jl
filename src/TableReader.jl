@@ -280,7 +280,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         # Scan the header line to get the column names
         n, headertokens = scanheader(mem, lastnl, params)
         skip(stream, n)
-        if length(headertokens) == 1 && location(headertokens[1])[2] == 0  # zero-length token
+        if length(headertokens) == 1 && length(headertokens[1]) == 0  # zero-length token
             throw(ReadError("found no column names in the header at line $(line)"))
         end
         line += 1
