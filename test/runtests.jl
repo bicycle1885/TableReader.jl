@@ -359,6 +359,13 @@ using Test
         foo\tbar\tbaz\tqux\tquux
         """
         @test_throws TableReader.ReadError("unexpected number of columns at line 2") readtsv(IOBuffer(data))
+
+        # too large floating-point number
+        data = """
+        col1\tcol2
+        1.0\t1e500
+        """
+        @test_throws TableReader.ReadError("failed to parse a floating-point number") readtsv(IOBuffer(data))
     end
 
     @testset "UTF-8 strings" begin
