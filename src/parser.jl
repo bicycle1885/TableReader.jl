@@ -113,7 +113,7 @@ function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matri
         if kind(t) & QSTRING != 0
             s = qstring(mem, start, length, quot)
         elseif usecache
-            s = allocate!(cache, mem.ptr + start - 1, length % UInt64)
+            s = allocate!(cache, mem.ptr + start - 1, length)
         else
             s = unsafe_string(mem.ptr + start - 1, length)
         end
@@ -142,7 +142,7 @@ function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory
             if kind(t) & QSTRING != 0
                 s = qstring(mem, start, length, quot)
             elseif usecache
-                s = allocate!(cache, mem.ptr + start - 1, length % UInt64)
+                s = allocate!(cache, mem.ptr + start - 1, length)
             else
                 s = unsafe_string(mem.ptr + start - 1, length)
             end

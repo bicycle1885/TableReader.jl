@@ -52,8 +52,8 @@ function Base.show(io::IO, cache::StringCache)
 end
 
 # LRU caching
-function allocate!(cache::StringCache, p::Ptr{UInt8}, length::UInt64)
-    meta = length | ((unsafe_load(p) % UInt64) << 56) | ((unsafe_load(p + length - 1) % UInt64) << 48)
+function allocate!(cache::StringCache, p::Ptr{UInt8}, length::Int64)
+    meta = length % UInt64 | UInt64(unsafe_load(p)) << 56 | UInt64(unsafe_load(p + length - 1)) << 48
     records = cache.records
     n = Base.length(records)
     stats = cache.stats
@@ -83,6 +83,6 @@ function allocate!(cache::StringCache, p::Ptr{UInt8}, length::UInt64)
     return string
 end
 
-@inline function memcmp(p1::Ptr, p2::Ptr, length::UInt64)
+@inline function memcmp(p1::Ptr, p2::Ptr, length::Int64)
     return ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), p1, p2, length)
 end
