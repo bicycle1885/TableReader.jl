@@ -71,30 +71,41 @@ end
 # -----
 
 function fillcolumn!(col::Vector{Float64}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
+    buf = Vector{UInt8}(undef, 32)
     @inbounds for i in 1:nvals
         start, length = location(tokens[c,i])
-        col[end-nvals+i] = parse_float(mem, start, length)
+        col[end-nvals+i] = parse_float!(buf, mem, start, length)
     end
     return col
 end
 
 function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
+    buf = Vector{UInt8}(undef, 32)
     @inbounds for i in 1:nvals
         t = tokens[c,i]
         if ismissing(t)
             col[end-nvals+i] = missing
         else
             start, length = location(tokens[c,i])
-            col[end-nvals+i] = parse_float(mem, start, length)
+            col[end-nvals+i] = parse_float!(buf, mem, start, length)
         end
     end
     return col
 end
 
-@inline function parse_float(mem::Memory, start::Int, length::Int)
-    return ccall(:jl_strtod_c, Cdouble, (Ptr{UInt8}, Ptr{Cvoid}), mem.ptr + start - 1, C_NULL)
+@inline function parse_float!(buf::Vector{UInt8}, mem::Memory, start::Int, length::Int)
+    if Base.length(buf) < length + 1
+        resize!(buf, length + 1)
+    end
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), pointer(buf), mem.ptr + start - 1, length)
+    @inbounds buf[length+1] = 0x00  # terminate with NUL
+    endptr = Ref{Ptr{UInt8}}()
+    return ccall(:strtod, Cdouble, (Ptr{UInt8}, Ptr{Cvoid}), pointer(buf), endptr)
 end
 
+
+# Bool
+# ----
 
 function fillcolumn!(col::Vector{Bool}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
     @inbounds for i in 1:nvals
@@ -106,6 +117,7 @@ end
 
 @inline function parse_bool(mem::Memory, start::Int, length::Int)
     c = mem[start] 
+    # No need to check all the bytes as the format is already validated.
     return (c == UInt8('f') || c == UInt8('F')) ? false : true
 end
 
