@@ -125,6 +125,27 @@ column.  This is useful to read files written by the `write.table` function of
 R with `row.names = TRUE`.
 
 
+## Data types
+
+Integers, floating-point numbers, boolean values, dates, datetimes, missings,
+and strings are automatically detected and converted from the text data.  The
+following list is the summary of the corresponding data types of Julia and the
+text formats described in the regular expression:
+
+- Integer (`Int`): `[-+]?\\d+`
+- Float (`Float64`): `[-+]?\\d*\\.?\\d+`, `[-+]?\\d*\\.?\\d+([eE][-+]?\\d+)?`, `NaN` or `Inf(inity)?` (case-insensitive)
+- Bool (`Bool`): `t(rue)?` or `f(alse)?` (case-insensitive)
+- Date (`Dates.Date`): `\\d{4}-\\d{2}-\\d{2}`
+- Datetime (`Dates.DateTime`): `\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?`
+- Missing (`Missing`): empty field or `NA` (case-sensitive)
+- String (`String`): otherwise
+
+Integers and floats have some overlap. The parser precedes integers over
+floats.  That means, if all values in a column are parsable as integers and
+floats, they are parsed as integers instead of floats; otherwise, they are
+parsed as floats. Similarly, all the types have higher precedence than strings.
+
+
 ## Parsing behavior
 
 The only supported text encoding of a file is UTF-8, which is the default
