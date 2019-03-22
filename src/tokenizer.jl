@@ -108,9 +108,7 @@ macro state(name, ex)
         #println($(QuoteNode(name)))
         #@show quoted
         pos += 1
-        #if pos > pos_end
-        #    @goto END
-        #end
+        #@assert 1 ≤ pos ≤ lastindex(mem)
         @inbounds c = mem[pos]
         #@show Char(c)
         #println()
