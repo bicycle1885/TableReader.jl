@@ -133,7 +133,8 @@ following list is the summary of the corresponding data types of Julia and the
 text formats described in the regular expression:
 
 - Integer (`Int`): `[-+]?\\d+`
-- Float (`Float64`): `[-+]?\\d*\\.?\\d+`, `[-+]?\\d*\\.?\\d+([eE][-+]?\\d+)?`, `NaN` or `Inf(inity)?` (case-insensitive)
+- Float (`Float64`): `[-+]?\\d*\\.?\\d+`, `[-+]?\\d*\\.?\\d+([eE][-+]?\\d+)?`,
+                     `[-+]?NaN` or `[-+]?Inf(inity)?` (case-insensitive)
 - Bool (`Bool`): `t(rue)?` or `f(alse)?` (case-insensitive)
 - Date (`Dates.Date`): `\\d{4}-\\d{2}-\\d{2}`
 - Datetime (`Dates.DateTime`): `\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?`
