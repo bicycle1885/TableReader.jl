@@ -416,8 +416,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     # not a date column
                 end
             elseif is_datetime_like(col)
+                hasT = occursin('T', col[1])  # check delimited by T or space
                 try
-                    columns[i] = parse_datetime(col)
+                    columns[i] = parse_datetime(col, hasT)
                 catch
                     # not a datetime column
                 end

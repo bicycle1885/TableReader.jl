@@ -230,10 +230,14 @@ end
 # DateTime
 # --------
 
-const DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(:?\.\d+)?$"
+const DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(:?\.\d+)?$"
 
-function parse_datetime(s::String)
-    return DateTime(s, dateformat"y-m-dTH:M:S.s")
+function parse_datetime(s::String, hasT::Bool)
+    if hasT
+        return DateTime(s, dateformat"y-m-dTH:M:S.s")
+    else
+        return DateTime(s, dateformat"y-m-d H:M:S.s")
+    end
 end
 
 function is_datetime_like(col::Vector{<:Union{String,Missing}})
@@ -253,22 +257,22 @@ function is_datetime_like(col::Vector{<:Union{String,Missing}})
     return n > 0
 end
 
-function parse_datetime(col::Vector{String})
+function parse_datetime(col::Vector{String}, hasT::Bool)
     out = Vector{DateTime}(undef, length(col))
     for i in 1:length(col)
-        out[i] = parse_datetime(col[i])
+        out[i] = parse_datetime(col[i], hasT)
     end
     return out
 end
 
-function parse_datetime(col::Vector{Union{String,Missing}})
+function parse_datetime(col::Vector{Union{String,Missing}}, hasT::Bool)
     out = Vector{Union{DateTime,Missing}}(undef, length(col))
     for i in 1:length(col)
         x = col[i]
         if x === missing
             out[i] = missing
         else
-            out[i] = parse_datetime(x)
+            out[i] = parse_datetime(x, hasT)
         end
     end
     return out
