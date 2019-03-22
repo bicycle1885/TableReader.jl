@@ -100,6 +100,10 @@ struct ReadError <: Exception
     msg::String
 end
 
+function Base.show(io::IO, error::ReadError)
+    print(io, summary(error), ": ", error.msg)
+end
+
 macro state(name, ex)
     @assert name isa Symbol
     @assert ex isa Expr && ex.head == :block
@@ -988,7 +992,12 @@ function scanline!(
     @label ERROR
     if isempty(msg)
         # default error message
-        msg = "invalid file format at line $(line), byte $(repr(c))"
+        msg = "invalid file format at line $(line), column $(i) "
+        if c ≤ 0x7f  # ASCII
+            msg = string(msg, "(found $(repr(Char(c))))")
+        else
+            msg = string(msg, "(found $(repr(c)))")
+        end
     end
     throw(ReadError(msg))
 

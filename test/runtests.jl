@@ -662,6 +662,13 @@ end
     @testset "malformed data" begin
         # empty
         @test_throws TableReader.ReadError("found no column names in the header at line 1") readcsv(IOBuffer(""))
+
+        # tab
+        data = """
+        col1,col2
+        foo,ba\tr
+        """
+        @test_throws TableReader.ReadError("invalid file format at line 2, column 2 (found '\\t')") readcsv(IOBuffer(data))
     end
 
     @testset "from file" begin
