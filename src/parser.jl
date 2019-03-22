@@ -1,6 +1,17 @@
 # Parser
 # ======
 
+# Missing
+# -------
+
+function fillcolumn!(col::Vector{Missing}, nvals::Int, mem::Memory, tokens::Matrix{Token}, c::Int, quot::UInt8)
+    for i in 1:nvals
+        @inbounds col[end-nvals+i] = missing
+    end
+    return col
+end
+
+
 # Integer
 # -------
 

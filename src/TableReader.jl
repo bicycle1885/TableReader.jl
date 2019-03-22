@@ -357,17 +357,12 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         end
 
         # Parse data.
-        bitmaps = aggregate_columns(tokens, n_new_rows)
+        bitmaps = summarizecolumns(tokens, n_new_rows)
         if isempty(columns)
             # infer data types of columns
             resize!(columns, ncols)
             for i in 1:ncols
-                T = (bitmaps[i] & INTEGER) != 0 ? Int :
-                    (bitmaps[i] & FLOAT) != 0 ? Float64 :
-                    (bitmaps[i] & BOOL) != 0 ? Bool : String
-                if (bitmaps[i] & 0b10000) != 0
-                    T = Union{T,Missing}
-                end
+                T = datatype(bitmaps[i])
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(
                     Vector{T}(undef, n_new_rows),
@@ -377,22 +372,20 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             # check existing columns
             for i in 1:ncols
                 col = columns[i]
-                T = eltype(col)
-                if T <: Union{Int,Missing}
-                    (bitmaps[i] & INTEGER) == 0 && throw_typeguess_error(i)
-                elseif T <: Union{Float64,Missing}
-                    (bitmaps[i] & FLOAT) == 0 && throw_typeguess_error(i)
-                elseif T <: Union{Bool,Missing}
-                    (bitmaps[i] & BOOL) == 0 && throw_typeguess_error(i)
-                else
-                    @assert T <: Union{String,Missing}
+                S = eltype(col)
+                n_rows = length(col)
+                n_total_rows = n_rows + n_new_rows
+                T = datatype(bitmaps[i])
+                if !(Union{S,T} <: S || Union{S,T} <: T)
+                    throw(ReadError(string(
+                        "type guessing failed at column $(i) ",
+                        "(guessed to be $(S) but found records of $(T)); ",
+                        "try larger chunksize or chunksize = 0 to disable chunking")))
                 end
-                if (bitmaps[i] & 0b10000) != 0 && !(T >: Union{T,Missing})
-                    # copy data to a new column
-                    col = copyto!(Vector{Union{T,Missing}}(undef, length(col) + n_new_rows), 1, col, 1, length(col))
+                if T <: S
+                    resize!(col, n_total_rows)
                 else
-                    # resize the column for new records
-                    resize!(col, length(col) + n_new_rows)
+                    col = copyto!(Vector{Union{S,T}}(undef, n_total_rows), 1, col, n_rows)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
@@ -429,10 +422,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     return DataFrame(columns, colnames)
 end
 
-function throw_typeguess_error(column::Int)
-    throw(ReadError("type guessing failed at column $(column); try larger chunksize or chunksize = 0 to disable chunking"))
-end
-
 # Count the number of lines in a memory block.
 function countbytes(mem::Memory, byte::UInt8)
     n = 0
@@ -442,15 +431,41 @@ function countbytes(mem::Memory, byte::UInt8)
     return n
 end
 
-function aggregate_columns(tokens::Matrix{Token}, nrows::Int)
+function datatype(bitmap::UInt8)
+    if (bitmap & 0b010000) != 0  # all values are missing
+        return Missing
+    end
+    T = (bitmap & INTEGER) != 0 ? Int     :
+        (bitmap & FLOAT)   != 0 ? Float64 :
+        (bitmap & BOOL)    != 0 ? Bool    : String
+    if (bitmap & 0b100000) != 0  # at least one value is missing
+        T = Union{T,Missing}
+    end
+    return T
+end
+
+# Summarize columns using bitmaps.
+function summarizecolumns(tokens::Matrix{Token}, nrows::Int)
+    # From the least significant bit:
+    #   1. INTEGER
+    #   2. FLOAT
+    #   3. BOOL
+    #   4. QSTRING
+    #   5. ∀ missing
+    #   6. ∃ missing
     ncols = size(tokens, 1)
     bitmaps = Vector{UInt8}(undef, ncols)
-    fill!(bitmaps, 0b1111)
+    fill!(bitmaps, 0b011111)
     @inbounds for j in 1:nrows, i in 1:ncols
         # Note that the tokens matrix is transposed.
         x = kind(tokens[i,j])
+        ismissing = x == 0b1111
         y = bitmaps[i]
-        bitmaps[i] = ((y & 0b10000) | ifelse(x == 0b1111, 0b10000, 0b00000)) | ((x & y) & 0b1111)
+        bitmap = 0b000000
+        bitmap |= (y & 0b100000) | ifelse(ismissing, 0b100000, 0b000000)
+        bitmap |= (y & 0b010000) & ifelse(ismissing, 0b010000, 0b000000)
+        bitmap |= (y & 0b001111) & x
+        bitmaps[i] = bitmap
     end
     return bitmaps
 end
@@ -567,13 +582,12 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
     precompile(Tuple{typeof(TableReader.parse_date), Array{Union{Base.Missing, String}, 1}})
-    precompile(Tuple{typeof(TableReader.throw_typeguess_error), Int64})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.countbytes), TranscodingStreams.Memory, UInt8})
     precompile(Tuple{typeof(TableReader.skipblanlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, Bool})
     precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
-    precompile(Tuple{typeof(TableReader.aggregate_columns), Array{TableReader.Token, 2}, Int64})
+    precompile(Tuple{typeof(TableReader.summarizecolumns), Array{TableReader.Token, 2}, Int64})
     precompile(Tuple{typeof(TableReader.parse_date), Array{String, 1}})
     precompile(Tuple{typeof(TableReader.parse_datetime), Array{Union{Base.Missing, String}, 1}})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Float64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
