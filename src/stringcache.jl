@@ -53,7 +53,7 @@ end
 
 # LRU caching
 function allocate!(cache::StringCache, p::Ptr{UInt8}, length::UInt64)
-    meta = length | ((unsafe_load(p) % UInt64) << 56) | ((unsafe_load(p, length) % UInt64) << 48)
+    meta = length | ((unsafe_load(p) % UInt64) << 56) | ((unsafe_load(p + length - 1) % UInt64) << 48)
     records = cache.records
     n = Base.length(records)
     stats = cache.stats
