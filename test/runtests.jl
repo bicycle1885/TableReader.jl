@@ -613,6 +613,41 @@ end
         @test df[:col2] == ["\nmulti\nline\nfield\n"]
     end
 
+    @testset "leading-zero string" begin
+        data = """
+        col1,col2
+        0000,0
+        0001,1
+        0002,2
+        0123,123
+        """
+        df = readcsv(IOBuffer(data))  # lzstring = true by default
+        @test df[:col1] == ["0000", "0001", "0002", "0123"]
+        @test df[:col2] == [0, 1, 2, 123]
+
+        df = readcsv(IOBuffer(data), lzstring = true)
+        @test df[:col1] == ["0000", "0001", "0002", "0123"]
+        @test df[:col2] == [0, 1, 2, 123]
+
+        df = readcsv(IOBuffer(data), lzstring = false)
+        @test df[:col1] == [0, 1, 2, 123]
+        @test df[:col2] == [0, 1, 2, 123]
+
+        data = """
+        col1
+        0.3
+        00.4
+        """
+        df = readcsv(IOBuffer(data))  # lzstring = true by default
+        @test df[:col1] == ["0.3", "00.4"]
+
+        df = readcsv(IOBuffer(data), lzstring = true)
+        @test df[:col1] == ["0.3", "00.4"]
+
+        df = readcsv(IOBuffer(data), lzstring = false)
+        @test df[:col1] == [0.3, 0.4]
+    end
+
     @testset "EOF without newline" begin
         data = """
         col1,col2
