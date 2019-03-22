@@ -6,4 +6,5 @@
 /*.csv
 /*.tsv
 /Manifest.toml
+/data
 /precompile
