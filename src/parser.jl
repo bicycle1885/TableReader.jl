@@ -38,15 +38,13 @@ const SAFE_INT_LENGTH = sizeof(string(typemax(Int))) - 1
         return parse(Int, String(take!(buf)))
     end
     i = start
-    b = mem[i]
+    @inbounds b = mem[i]
+    negative = false
     if b == UInt8('-')
-        sign = -1
+        negative = true
         i += 1
     elseif b == UInt8('+')
-        sign = +1
         i += 1
-    else
-        sign = +1
     end
     n::Int = 0
     while i ≤ stop
@@ -54,7 +52,7 @@ const SAFE_INT_LENGTH = sizeof(string(typemax(Int))) - 1
         n = 10n + (b - UInt8('0'))
         i += 1
     end
-    return sign * n
+    return negative ? -n : n
 end
 
 
