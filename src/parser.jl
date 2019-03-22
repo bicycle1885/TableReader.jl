@@ -94,26 +94,18 @@ function fillcolumn!(col::Vector{Union{Float64,Missing}}, nvals::Int, mem::Memor
 end
 
 @inline function parse_float!(buf::Vector{UInt8}, mem::Memory, start::Int, length::Int)
-    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), pointer(buf), mem.ptr + start - 1, length)
-    @inbounds buf[length+1] = 0x00  # terminate with NUL
-    hasvalue, value = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), pointer(buf), 0, length)
-    #hasvalue, value = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), mem.ptr, start - 1, length)
-    if !hasvalue
-        throw(ReadError("failed to parse a floating-point number"))
-    end
-    return value
-end
-#=
-@inline function parse_float!(buf::Vector{UInt8}, mem::Memory, start::Int, length::Int)
     if Base.length(buf) < length + 1
         resize!(buf, length + 1)
     end
     ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), pointer(buf), mem.ptr + start - 1, length)
     @inbounds buf[length+1] = 0x00  # terminate with NUL
-    endptr = Ref{Ptr{UInt8}}()
-    return ccall(:strtod, Cdouble, (Ptr{UInt8}, Ptr{Cvoid}), pointer(buf), endptr)
+    # TODO: The next line is the bottleneck of parsing lots of floats!
+    hasvalue, value = ccall(:jl_try_substrtod, Tuple{Bool,Float64}, (Ptr{UInt8}, Csize_t, Csize_t), pointer(buf), 0, length)
+    if !hasvalue
+        throw(ReadError("failed to parse a floating-point number"))
+    end
+    return value
 end
-=#
 
 
 # Bool
