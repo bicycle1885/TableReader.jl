@@ -373,8 +373,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             for i in 1:ncols
                 col = columns[i]
                 S = eltype(col)
-                n_rows = length(col)
-                n_total_rows = n_rows + n_new_rows
                 T = datatype(bitmaps[i])
                 if !(Union{S,T} <: S || Union{S,T} <: T)
                     throw(ReadError(string(
@@ -382,10 +380,11 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                         "(guessed to be $(S) but found records of $(T)); ",
                         "try larger chunksize or chunksize = 0 to disable chunking")))
                 end
+                n_rows = length(col)
                 if T <: S
-                    resize!(col, n_total_rows)
+                    resize!(col, n_rows + n_new_rows)
                 else
-                    col = copyto!(Vector{Union{S,T}}(undef, n_total_rows), 1, col, n_rows)
+                    col = copyto!(Vector{Union{S,T}}(undef, n_rows + n_new_rows), 1, col, n_rows)
                 end
                 @debug "Filling $(colnames[i])::$(T) column"
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
