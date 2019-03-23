@@ -111,6 +111,18 @@ dataframe = readcsv("https://example.com/somefile.csv")
 dataframe = readcsv(`unzip -p data.zip somefile.csv`)
 ```
 
+The following parameters are available:
+
+- `delim`: specify the delimiter character
+- `quot`: specify the quotation character
+- `trim`: trim space around fields
+- `lzstring`: parse excess leading zeros as strings
+- `skip`: skip the leading lines
+- `skipblank`: skip blank lines
+- `colnames`: set the column names
+- `hasheader`: notify the parser the existence of a header
+- `chunksize`: set the size of a chunk
+
 See the docstring of `readdlm` for more details.
 
 
