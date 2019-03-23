@@ -459,13 +459,11 @@ function scanline!(
         elseif c == UInt8('F') || c == UInt8('f')
             if @follows("alse")
                 pos += 4
-                @goto BOOL
             end
             @goto BOOL
         elseif c == UInt8('T') || c == UInt8('t')
             if @follows("rue")
                 pos += 3
-                @goto BOOL
             end
             @goto BOOL
         elseif UInt8('!') ≤ c ≤ UInt8('~')
