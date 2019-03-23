@@ -407,7 +407,10 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 col = columns[i]
                 S = eltype(col)
                 T = datatype(bitmaps[i])
-                if !(Union{S,T} <: S || Union{S,T} <: T)
+                U = Union{S,T}
+                if (S <: Union{Int,Missing} && T <: Union{Float64,Missing}) || (S <: Union{Float64,Missing} && T <: Union{Int,Missing})
+                    U = promote_type(S, T)
+                elseif !(U <: S || U <: T)
                     throw(ReadError(string(
                         "type guessing failed at column $(i) ",
                         "(guessed to be $(S) but found records of $(T)); ",
@@ -417,9 +420,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 if T <: S
                     resize!(col, n_rows + n_new_rows)
                 else
-                    col = copyto!(Vector{Union{S,T}}(undef, n_rows + n_new_rows), 1, col, 1, n_rows)
+                    col = copyto!(Vector{U}(undef, n_rows + n_new_rows), 1, col, 1, n_rows)
                 end
-                @debug "Filling $(colnames[i])::$(T) column"
+                @debug "Filling $(colnames[i])::$(U) column"
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
             end
         end
