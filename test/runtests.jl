@@ -569,15 +569,30 @@ end
         @test df[:col3] == ["c", "baz"]
     end
 
-    @testset "header" begin
+    @testset "no header" begin
         data = """
-        1,2,3
-        4,5,6
+        A,B,C
+        a,b,c
         """
-        df = readcsv(IOBuffer(data), colnames = ["col1", "col2", "col3"])
-        @test df[:col1] == [1, 4]
-        @test df[:col2] == [2, 5]
-        @test df[:col3] == [3, 6]
+        df = readcsv(IOBuffer(data))
+        @test df[:A] == ["a"]
+        @test df[:B] == ["b"]
+        @test df[:C] == ["c"]
+
+        df = readcsv(IOBuffer(data), hasheader = false)
+        @test df[:X1] == ["A", "a"]
+        @test df[:X2] == ["B", "b"]
+        @test df[:X3] == ["C", "c"]
+
+        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3])
+        @test df[:C1] == ["A", "a"]
+        @test df[:C2] == ["B", "b"]
+        @test df[:C3] == ["C", "c"]
+
+        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3], hasheader = true)
+        @test df[:C1] == ["a"]
+        @test df[:C2] == ["b"]
+        @test df[:C3] == ["c"]
     end
 
     @testset "quotation" begin
