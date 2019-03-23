@@ -51,6 +51,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             delim,
             quot = '"',
             trim = true,
+            lzstring = true,
             skip = 0,
             skipblank = true,
             colnames = nothing,
@@ -102,6 +103,10 @@ allowed: $(join(repr.(ALLOWED_QUOTECHARS), ", ")).
 `trim` specifies whether the parser trims space (0x20) characters around a field.
 If `trim` is true, `delim` and `quot` cannot be a space character.
 
+`lzstring` specifies whether fields with excess leading zeros are treated as
+strings.  If `lzstring` is true, fields such as "0003" will be interpreted as
+strings instead of integers.
+
 `skip` specifies the number of lines to skip before reading data.  The next
 line just after the skipped lines is considered as a header line if the
 `colnames` parameter is not specified.
@@ -145,6 +150,11 @@ Integers and floats have some overlap. The parser precedes integers over
 floats.  That means, if all values in a column are parsable as integers and
 floats, they are parsed as integers instead of floats; otherwise, they are
 parsed as floats. Similarly, all the types have higher precedence than strings.
+
+The parser parameter `lzstring` affects interpretation of numbers. If
+`lzstring` is true, numbers with excess leading zeros (e.g., "0001", "00.1")
+are interpreted as strings. Fields without excess leading zeros (e.g., "0",
+"0.1") are interepreted as numbers regardless of this parameter.
 
 
 ## Parsing behavior
@@ -203,6 +213,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     end
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
+    push!(kwargs, Expr(:kw, :(lzstring::Bool), true))  # lzstring::Bool = true
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
@@ -211,7 +222,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -224,12 +235,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end

@@ -6,12 +6,13 @@ struct ParserParameters
     delim::UInt8
     quot::UInt8
     trim::Bool
+    lzstring::Bool
     skip::Int
     skipblank::Bool
     colnames::Union{Vector{Symbol},Nothing}
     chunksize::Int
 
-    function ParserParameters(delim::Char, quot::Char, trim::Bool, skip::Integer, skipblank::Bool, colnames::Any, chunksize::Integer)
+    function ParserParameters(delim::Char, quot::Char, trim::Bool, lzstring::Bool, skip::Integer, skipblank::Bool, colnames::Any, chunksize::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -36,6 +37,7 @@ struct ParserParameters
             UInt8(delim),
             UInt8(quot),
             trim,
+            lzstring,
             skip,
             skipblank,
             colnames,
@@ -379,7 +381,7 @@ function scanline!(
     )
 
     # Check parameters.
-    delim, quot, trim = params.delim, params.quot, params.trim
+    delim, quot, trim, lzstring = params.delim, params.quot, params.trim, params.lzstring
     @assert delim != quot
     @assert !trim || delim != SP
     @assert !trim || quot != SP
@@ -414,7 +416,12 @@ function scanline!(
             @goto BEGIN
         elseif c == UInt8('-') || c == UInt8('+')
             @goto SIGN
-        elseif UInt8('0') ≤ c ≤ UInt8('9')
+        elseif c == UInt8('0')
+            if lzstring
+                @goto ZERO
+            end
+            @goto INTEGER
+        elseif UInt8('1') ≤ c ≤ UInt8('9')
             @goto INTEGER
         elseif c == SP
             if trim && !quoted
@@ -514,6 +521,40 @@ function scanline!(
             @goto LF
         elseif c == CR
             @recordtoken STRING
+            @goto CR
+        else
+            @multibytestring
+        end
+    end
+
+    @state ZERO begin
+        if quoted && c == quot
+            @recordtoken INTEGER|FLOAT
+            @goto QUOTE_END
+        elseif c == delim
+            if quoted
+                @goto STRING
+            end
+            @recordtoken INTEGER|FLOAT
+            @endtoken
+            @goto BEGIN
+        elseif c == UInt8('.')
+            @goto POINT_FLOAT
+        elseif c == UInt8('e') || c == UInt8('E')
+            @goto EXPONENT
+        elseif UInt8('!') ≤ c ≤ UInt8('~')
+            @goto STRING
+        elseif c == SP
+            if trim && !quoted
+                @recordtoken INTEGER|FLOAT
+                @goto INTEGER_SPACE
+            end
+            @goto STRING
+        elseif c == LF
+            @recordtoken INTEGER|FLOAT
+            @goto LF
+        elseif c == CR
+            @recordtoken INTEGER|FLOAT
             @goto CR
         else
             @multibytestring
