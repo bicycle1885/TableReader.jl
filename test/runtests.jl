@@ -769,6 +769,16 @@ end
             @test df[:col3] == ["one", "two"]
         end
     end
+
+    @testset "repeated variable names" begin
+        data = """
+            col1,col1
+            1,2
+            """
+            df = readcsv(IOBuffer(data))
+            @test df[:col1_1] == [2]
+    end
+
 end
 
 @testset "readdlm" begin
