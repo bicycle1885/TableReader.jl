@@ -408,7 +408,8 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 S = eltype(col)
                 T = datatype(bitmaps[i])
                 U = Union{S,T}
-                if (S <: Union{Int,Missing} && T <: Union{Float64,Missing}) || (S <: Union{Float64,Missing} && T <: Union{Int,Missing})
+                if (S <: Union{Int,Missing} && T <: Union{Float64,Missing}) ||
+                   (T <: Union{Int,Missing} && S <: Union{Float64,Missing})
                     U = promote_type(S, T)
                 elseif !(U <: S || U <: T)
                     throw(ReadError(string(
