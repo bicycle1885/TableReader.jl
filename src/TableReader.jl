@@ -55,6 +55,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             skip = 0,
             skipblank = true,
             colnames = nothing,
+            hasheader = (colnames === nothing),
             chunksize = 1 MiB)
 
 Read a character delimited text file.
@@ -121,6 +122,20 @@ false, encountering a blank line throws an exception.
 the column names are read from the first line just after skipping lines
 specified by `skip` (no lines are skipped by default). Any iterable object is
 allowed.
+
+`hasheader` specified whether the data has a header line or not. The default
+value is `colnames === nothing` and thus the parser assumes there is a header
+if and only if no column names are specified.
+
+The following table summarizes the behavior of the `colnames` and `hasheader`
+parameters.
+
+| `colnames` | `hasheader` | column names |
+|:-----------|:------------|:-------------|
+| `nothing` | `true`  | taken from the header (default) |
+| `nothing` | `false` | automatically generated (X1, X2, ...) |
+| specified | `true`  | taken from `colnames` (the header line is skipped) |
+| specified | `false` | taken from `colnames` |
 
 If unnamed columns are found in the header, they are renamed to `UNNAMED_{j}`
 for ease of access, where `{j}` is replaced by the column number. If the number
@@ -217,12 +232,13 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
+    push!(kwargs, Expr(:kw, :(hasheader::Bool), :(colnames === nothing)))  # hasheader::Bool = (colnames === nothing)
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -235,12 +251,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -309,29 +325,44 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         line += skipblanlines(stream, params.trim)
     end
     mem, lastnl = bufferlines(stream)
-    if params.colnames === nothing
-        # Scan the header line to get the column names
-        n, headertokens = scanheader(mem, lastnl, params)
-        skip(stream, n)
-        if length(headertokens) == 1 && length(headertokens[1]) == 0  # zero-length token
-            throw(ReadError("found no column names in the header at line $(line)"))
-        end
-        line += 1
-        colnames = Symbol[]
-        for (i, token) in enumerate(headertokens)
-            start, length = location(token)
-            if (kind(token) & QSTRING) != 0
-                name = qstring(mem, start, length, params.quot)
-            else
-                name = unsafe_string(mem.ptr + start - 1, length)
+    if params.hasheader
+        if params.colnames === nothing
+            # Scan the header line to get the column names
+            n, headertokens = scanheader(mem, lastnl, params)
+            skip(stream, n)
+            if length(headertokens) == 1 && length(headertokens[1]) == 0  # zero-length token
+                throw(ReadError("found no column names in the header at line $(line)"))
             end
-            if isempty(name)  # unnamed column
-                name = "UNNAMED_$(i)"
+            line += 1
+            colnames = Symbol[]
+            for (i, token) in enumerate(headertokens)
+                start, length = location(token)
+                if (kind(token) & QSTRING) != 0
+                    name = qstring(mem, start, length, params.quot)
+                else
+                    name = unsafe_string(mem.ptr + start - 1, length)
+                end
+                if isempty(name)  # unnamed column
+                    name = "UNNAMED_$(i)"
+                end
+                push!(colnames, Symbol(name))
             end
-            push!(colnames, Symbol(name))
+        else
+            # skip the header line
+            line += skiplines(stream, 1)
+            colnames = params.colnames
         end
     else
-        colnames = params.colnames
+        # no header line
+        if params.colnames === nothing
+            # count the number of columns from data
+            n_max_cols = countbytesline(mem, params.delim) + 1
+            _, n_cols = scanline!(
+                Array{Token}(undef, (n_max_cols, 1)), 1, mem, 0, lastnl, line, params)
+            colnames = [Symbol("X", i) for i in 1:n_cols]
+        else
+            colnames = params.colnames
+        end
     end
     ncols = length(colnames)
 
@@ -458,11 +489,25 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     return DataFrame(columns, colnames)
 end
 
-# Count the number of lines in a memory block.
+# Count the number of `byte` in a memory block.
 function countbytes(mem::Memory, byte::UInt8)
     n = 0
     @inbounds @simd for i in 1:length(mem)
         n += mem[i] == byte
+    end
+    return n
+end
+
+# Count the number of `byte` in a line.
+function countbytesline(mem::Memory, byte::UInt8)
+    n = 0
+    for i in 1:lastindex(mem)
+        @inbounds x = mem[i]
+        if x == CR || x == LF
+            break
+        elseif x == byte
+            n += 1
+        end
     end
     return n
 end
