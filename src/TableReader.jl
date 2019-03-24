@@ -417,6 +417,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         end
         if n_new_rows == 0
             # only blank lines
+            skip(stream, pos)
             continue
         end
 
@@ -459,10 +460,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             end
         end
         skip(stream, pos)
-        if params.chunksize == 0
-            # Without chunking, reading data must finish in a pass.
-            @assert eof(stream)
-        end
     end
 
     # Parse strings as date or datetime objects.
