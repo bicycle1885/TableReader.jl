@@ -2,8 +2,8 @@ using TableReader
 
 # Measure elapsed time.
 filename = ARGS[1]
-reader = endswith(filename, ".csv") ? readcsv :
-         endswith(filename, ".tsv") ? readtsv :
+reader = occursin(".csv", filename) ? readcsv :
+         occursin(".tsv", filename) ? readtsv :
          error("the extension of the filename must .csv or .tsv")
 if length(ARGS) ≥ 2
     kwargs = eval(Meta.parse(ARGS[2]))
