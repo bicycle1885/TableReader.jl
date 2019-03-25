@@ -770,6 +770,28 @@ end
         end
     end
 
+    @testset "switching from strings to numbers" begin
+        buf = IOBuffer()
+        println(buf, "col1,col2")
+        for i in 1:1_000_000
+            if i % 1024 == 0
+                println(buf, "foo,")  # missing
+            else
+                println(buf, "foo,bar")
+            end
+        end
+        for i in 1:1_000_000
+            println(buf, "1,2")
+        end
+        for i in 1:1_000_000
+            println(buf, "1.1,2.2")
+        end
+        seekstart(buf)
+        df = readcsv(buf)
+        @test df[:col1] isa Vector{String}
+        @test df[:col2] isa Vector{Union{String,Missing}}
+    end
+
     @testset "repeated variable names" begin
         data = """
             col1,col1

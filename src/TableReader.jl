@@ -443,6 +443,13 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 if (S <: Union{Int,Missing} && T <: Union{Float64,Missing}) ||
                    (T <: Union{Int,Missing} && S <: Union{Float64,Missing})
                     U = promote_type(S, T)
+                elseif S <: Union{String,Missing} && String <: S
+                    # any field is interpretable as string
+                    if Missing <: U
+                        U = Union{String,Missing}
+                    else
+                        U = String
+                    end
                 elseif !(U <: S || U <: T)
                     throw(ReadError(string(
                         "type guessing failed at column $(i) ",
