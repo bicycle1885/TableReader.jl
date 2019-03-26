@@ -17,7 +17,6 @@ RESULTS = \
 	results/tmp0u3qt3mu-notab.csv.csv \
 	results/tmp0u3qt3mu-notab.pandas.csv \
 	results/dge.tablereader.csv \
-	results/dge.csv.csv \
 	results/dge.pandas.csv
 
 .PHONY: benchmark
