@@ -23,6 +23,10 @@ RESULTS = \
 .PHONY: benchmark
 benchmark: $(RESULTS)
 
+.PHONY: clean
+clean:
+	rm -f $(RESULTS)
+
 
 # Default parameters
 
