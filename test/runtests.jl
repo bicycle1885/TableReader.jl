@@ -1,4 +1,5 @@
 using TableReader
+using DataFrames: DataFrame
 using Dates
 using Test
 
@@ -8,7 +9,7 @@ using Test
         buffer = IOBuffer("""
         col1
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1]
         @test size(df) == (0, 1)
@@ -16,7 +17,7 @@ using Test
         buffer = IOBuffer("""
         col1\tcol2\tcol3
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test size(df) == (0, 3)
@@ -27,7 +28,7 @@ using Test
         1\t23\t456
         -10\t-99\t0
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [1, -10]
@@ -42,7 +43,7 @@ using Test
         .000\t.123\t100.000
         1e3\t1.E+123\t-8.2e-00
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
@@ -59,7 +60,7 @@ using Test
         t\tf
         T\tF
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2]
         @test df[:col1] == [true, true, true, true, true, true]
@@ -71,7 +72,7 @@ using Test
         a\tb\tc
         foo\tbar\tbaz
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == ["a", "foo"]
@@ -83,7 +84,7 @@ using Test
         col1\tcol2\tcol3
         2015-12-21\t2019-01-01\t1999-09-11
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [Date(2015, 12, 21)]
@@ -95,7 +96,7 @@ using Test
         col1\tcol2\tcol3
         2015-12-21T00:00:00\t2015-12-21T11:22:33\t2015-12-21T11:22:33.444
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [DateTime(2015, 12, 21, 0, 0, 0)]
@@ -107,7 +108,7 @@ using Test
         col1\tcol2\tcol3
         2015-12-21 00:00:00\t2015-12-21 11:22:33\t2015-12-21 11:22:33.444
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [DateTime(2015, 12, 21, 0, 0, 0)]
@@ -122,7 +123,7 @@ using Test
         nan\tNan\tNaN\tNAN
         -nan\t+Nan\t-NaN\t+NAN
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test all(isnan.(df[:col1]))
         @test all(isnan.(df[:col2]))
         @test all(isnan.(df[:col3]))
@@ -136,7 +137,7 @@ using Test
         infinity\tInfinity\tInFiNiTy\tINFINITY
         -infinity\t+Infinity\t-InFiNiTy\t+INFINITY
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test all(isinf.(df[:col1]))
         @test all(isinf.(df[:col2]))
         @test all(isinf.(df[:col3]))
@@ -149,7 +150,7 @@ using Test
         "1"\t"23"\t"456"
         "-10"\t"-99"\t"0"
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, -10]
         @test df[:col2] == [23, -99]
         @test df[:col3] == [456, 0]
@@ -162,7 +163,7 @@ using Test
         ".000"\t".123"\t"100.000"
         "1e3"\t"1.E+123"\t"-8.2e-00"
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
@@ -175,7 +176,7 @@ using Test
         "a"\t"b"\t"c"
         "foo"\t"bar"\t"baz"
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == ["a", "foo"]
@@ -187,7 +188,7 @@ using Test
         foo\tbar\tbaz
         foo\tbar\tbaz
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test df[:col1] == ["foo", "foo"]
         @test df[:col2] == ["bar", "bar"]
         @test df[:col3] == ["baz", "baz"]
@@ -197,7 +198,7 @@ using Test
         col1\tcol2
         " ""OK"" "\t"\""OK"\""
         """)
-        df = readtsv(buffer)
+        df = readtsv(buffer) |> DataFrame
         @test df[:col1] == [" \"OK\" "]
         @test df[:col2] == ["\"OK\""]
     end
@@ -210,17 +211,17 @@ using Test
            4\t   5\t   6
           7 \t 8  \t 9  
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 4, 7]
         @test df[:col2] == [2, 5, 8]
         @test df[:col3] == [3, 6, 9]
 
-        df = readtsv(IOBuffer(data); trim = true)
+        df = readtsv(IOBuffer(data); trim = true) |> DataFrame
         @test df[:col1] == [1, 4, 7]
         @test df[:col2] == [2, 5, 8]
         @test df[:col3] == [3, 6, 9]
 
-        df = readtsv(IOBuffer(data); trim = false)
+        df = readtsv(IOBuffer(data); trim = false) |> DataFrame
         @test df[:col1] == ["1   ", "   4", "  7 "]
         @test df[:col2] == ["   2", "   5", " 8  "]
         @test df[:col3] == ["   3", "   6", " 9  "]
@@ -229,12 +230,12 @@ using Test
          col1  \t col2 \t col3  
          foo   \t  b  \t baz
         """
-        df = readtsv(IOBuffer(data); trim = true)
+        df = readtsv(IOBuffer(data); trim = true) |> DataFrame
         @test df[:col1] == ["foo"]
         @test df[:col2] == ["b"]
         @test df[:col3] == ["baz"]
 
-        df = readtsv(IOBuffer(data); trim = false)
+        df = readtsv(IOBuffer(data); trim = false) |> DataFrame
         @test df[Symbol(" col1  ")] == [" foo   "]
         @test df[Symbol(" col2 ")] == ["  b  "]
         @test df[Symbol(" col3  ")] == [" baz"]
@@ -246,7 +247,7 @@ using Test
         1\t2\t3
         \t5\t
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] isa Vector{Union{Int,Missing}}
         @test df[:col2] isa Vector{Int}
         @test df[:col3] isa Vector{Union{Int,Missing}}
@@ -262,7 +263,7 @@ using Test
         1.0\t2.2\t-9.8
         \t10\t
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] isa Vector{Union{Float64,Missing}}
         @test df[:col2] isa Vector{Float64}
         @test df[:col3] isa Vector{Union{Float64,Missing}}
@@ -278,7 +279,7 @@ using Test
         foo\t\tbar
         baz\tqux\t
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] isa Vector{String}
         @test df[:col2] isa Vector{Union{String,Missing}}
         @test df[:col3] isa Vector{Union{String,Missing}}
@@ -296,7 +297,7 @@ using Test
         NA\tNA
         "NA"\t"NA"
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[1,:col1] == 1
         @test ismissing(df[2,:col1])
         @test ismissing(df[3,:col1])
@@ -314,7 +315,7 @@ using Test
         "Na"\t"nA"
         "NA"\t"NA"
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[1,:col1] == "na"
         @test ismissing(df[2,:col1])
         @test df[3,:col1] == "Na"
@@ -330,7 +331,7 @@ using Test
         col1\tcol2
         $(typemax(Int))\t$(typemin(Int))
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [typemax(Int)]
         @test df[:col2] == [typemin(Int)]
 
@@ -374,7 +375,7 @@ using Test
         甲\t乙\t丙
         👌\t😀😀😀\t🐸🐓
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == ["甲", "👌"]
         @test df[:col2] == ["乙", "😀😀😀"]
         @test df[:col3] == ["丙", "🐸🐓"]
@@ -386,7 +387,7 @@ using Test
         1\t2\t3\r
         4\t5\t6 \r
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 4]
         @test df[:col2] == [2, 5]
         @test df[:col3] == [3, 6]
@@ -396,7 +397,7 @@ using Test
         1.0\t2.0\t3.0\r
         4.0\t5.0\t6.0 \r
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1.0, 4.0]
         @test df[:col2] == [2.0, 5.0]
         @test df[:col3] == [3.0, 6.0]
@@ -406,7 +407,7 @@ using Test
         foo\tbar\tbaz\r
         hoge\tfuga\tpiyo \r
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == ["foo", "hoge"]
         @test df[:col2] == ["bar", "fuga"]
         @test df[:col3] == ["baz", "piyo"]
@@ -414,7 +415,7 @@ using Test
 
     @testset "CR" begin
         data = """col1\tcol2\r123\t456\r"""
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [123]
         @test df[:col2] == [456]
     end
@@ -428,7 +429,7 @@ using Test
         1\t2
         3\t4
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 3]
         @test df[:col2] == [2, 4]
 
@@ -440,7 +441,7 @@ using Test
         1\t2
         3\t4
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 3]
         @test df[:col2] == [2, 4]
 
@@ -452,7 +453,7 @@ using Test
 
         3\t4
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 3]
         @test df[:col2] == [2, 4]
 
@@ -464,7 +465,7 @@ using Test
 
 
         """
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1, 3]
         @test df[:col2] == [2, 4]
     end
@@ -488,14 +489,14 @@ using Test
         data = take!(buf)
 
         # with chunking
-        df = readtsv(IOBuffer(data))
+        df = readtsv(IOBuffer(data)) |> DataFrame
         @test size(df) == (m, n + 1)
         @test df[:name] == ["row$(i)" for i in 1:m]
         @test df[:col1] == 1:m
         @test df[:col2] == 1:m
 
         # without chunking
-        df = readtsv(IOBuffer(data), chunksize = 0)
+        df = readtsv(IOBuffer(data), chunksize = 0) |> DataFrame
         @test size(df) == (m, n + 1)
         @test df[:name] == ["row$(i)" for i in 1:m]
         @test df[:col1] == 1:m
@@ -503,22 +504,22 @@ using Test
     end
 
     @testset "from file" begin
-        df = readtsv(joinpath(@__DIR__, "test.tsv"))
+        df = readtsv(joinpath(@__DIR__, "test.tsv")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readtsv(joinpath(@__DIR__, "test.tsv.gz"))
+        df = readtsv(joinpath(@__DIR__, "test.tsv.gz")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readtsv(joinpath(@__DIR__, "test.tsv.zst"))
+        df = readtsv(joinpath(@__DIR__, "test.tsv.zst")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readtsv(joinpath(@__DIR__, "test.tsv.xz"))
+        df = readtsv(joinpath(@__DIR__, "test.tsv.xz")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
@@ -533,7 +534,7 @@ end
         1,23,456
         -10,-99,0
         """)
-        df = readcsv(buffer)
+        df = readcsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [1, -10]
@@ -548,7 +549,7 @@ end
         .000,.123,100.000
         1e3,1.E+123,-8.2e-00
         """)
-        df = readcsv(buffer)
+        df = readcsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == [1.0, -1.2, 0.000, 1e3]
@@ -561,7 +562,7 @@ end
         a,b,c
         foo,bar,baz
         """)
-        df = readcsv(buffer)
+        df = readcsv(buffer) |> DataFrame
         @test eof(buffer)
         @test names(df) == [:col1, :col2, :col3]
         @test df[:col1] == ["a", "foo"]
@@ -574,22 +575,22 @@ end
         A,B,C
         a,b,c
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:A] == ["a"]
         @test df[:B] == ["b"]
         @test df[:C] == ["c"]
 
-        df = readcsv(IOBuffer(data), hasheader = false)
+        df = readcsv(IOBuffer(data), hasheader = false) |> DataFrame
         @test df[:X1] == ["A", "a"]
         @test df[:X2] == ["B", "b"]
         @test df[:X3] == ["C", "c"]
 
-        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3])
+        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3]) |> DataFrame
         @test df[:C1] == ["A", "a"]
         @test df[:C2] == ["B", "b"]
         @test df[:C3] == ["C", "c"]
 
-        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3], hasheader = true)
+        df = readcsv(IOBuffer(data), colnames = [:C1, :C2, :C3], hasheader = true) |> DataFrame
         @test df[:C1] == ["a"]
         @test df[:C2] == ["b"]
         @test df[:C3] == ["c"]
@@ -601,7 +602,7 @@ end
         "hi, there",","
         "1,2,3,4", ",,,"
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == ["hi, there", "1,2,3,4"]
         @test df[:col2] == [",", ",,,"]
     end
@@ -612,7 +613,7 @@ end
         "",""
         "1","2"
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test ismissing(df[1,:col1])
         @test df[2,:col1] == 1
         @test ismissing(df[1,:col2])
@@ -630,7 +631,7 @@ end
         field
         "
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == ["oh,\nthere\nthere"]
         @test df[:col2] == ["\nmulti\nline\nfield\n"]
     end
@@ -643,15 +644,15 @@ end
         0002,2
         0123,123
         """
-        df = readcsv(IOBuffer(data))  # lzstring = true by default
+        df = readcsv(IOBuffer(data)) |> DataFrame  # lzstring = true by default
         @test df[:col1] == ["0000", "0001", "0002", "0123"]
         @test df[:col2] == [0, 1, 2, 123]
 
-        df = readcsv(IOBuffer(data), lzstring = true)
+        df = readcsv(IOBuffer(data), lzstring = true) |> DataFrame
         @test df[:col1] == ["0000", "0001", "0002", "0123"]
         @test df[:col2] == [0, 1, 2, 123]
 
-        df = readcsv(IOBuffer(data), lzstring = false)
+        df = readcsv(IOBuffer(data), lzstring = false) |> DataFrame
         @test df[:col1] == [0, 1, 2, 123]
         @test df[:col2] == [0, 1, 2, 123]
 
@@ -660,13 +661,13 @@ end
         0.3
         00.4
         """
-        df = readcsv(IOBuffer(data))  # lzstring = true by default
+        df = readcsv(IOBuffer(data)) |> DataFrame # lzstring = true by default
         @test df[:col1] == ["0.3", "00.4"]
 
-        df = readcsv(IOBuffer(data), lzstring = true)
+        df = readcsv(IOBuffer(data), lzstring = true) |> DataFrame
         @test df[:col1] == ["0.3", "00.4"]
 
-        df = readcsv(IOBuffer(data), lzstring = false)
+        df = readcsv(IOBuffer(data), lzstring = false) |> DataFrame
         @test df[:col1] == [0.3, 0.4]
     end
 
@@ -674,7 +675,7 @@ end
         data = """
         col1,col2
         1,2"""
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1]
         @test df[:col2] == [2]
     end
@@ -684,7 +685,7 @@ end
         col1,,col3,
         1,foo,3,bar
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:col1] == [1]
         @test df[:UNNAMED_2] == ["foo"]
         @test df[:col3] == [3]
@@ -696,7 +697,7 @@ end
         col1,col2,col3
         foo,1,2,3
         """
-        df = readcsv(IOBuffer(data))
+        df = readcsv(IOBuffer(data)) |> DataFrame
         @test df[:UNNAMED_0] == ["foo"]
         @test df[:col1] == [1]
         @test df[:col2] == [2]
@@ -710,7 +711,7 @@ end
         col1,col2,col3
         1,2,3
         """
-        df = readcsv(IOBuffer(data), skip = 2)
+        df = readcsv(IOBuffer(data), skip = 2) |> DataFrame
         @test df[:col1] == [1]
         @test df[:col2] == [2]
         @test df[:col3] == [3]
@@ -729,22 +730,22 @@ end
     end
 
     @testset "from file" begin
-        df = readcsv(joinpath(@__DIR__, "test.csv"))
+        df = readcsv(joinpath(@__DIR__, "test.csv")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readcsv(joinpath(@__DIR__, "test.csv.gz"))
+        df = readcsv(joinpath(@__DIR__, "test.csv.gz")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readcsv(joinpath(@__DIR__, "test.csv.zst"))
+        df = readcsv(joinpath(@__DIR__, "test.csv.zst")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
 
-        df = readcsv(joinpath(@__DIR__, "test.csv.xz"))
+        df = readcsv(joinpath(@__DIR__, "test.csv.xz")) |> DataFrame
         @test df[:col1] == [1, 2]
         @test df[:col2] == [1.0, 2.0]
         @test df[:col3] == ["one", "two"]
@@ -754,7 +755,7 @@ end
         if Sys.which("echo") === nothing
             @info "skip tests: echo command is not found"
         else
-            df = readcsv(`echo $("col1,col2\n1,2")`)
+            df = readcsv(`echo $("col1,col2\n1,2")`) |> DataFrame
             @test df[:col1] == [1]
             @test df[:col2] == [2]
         end
@@ -763,7 +764,7 @@ end
             @info "skip tests: cat/gzip commands are not found"
         else
             testfile = joinpath(@__DIR__, "test.csv")
-            df = readcsv(pipeline(`cat $(testfile)`, `gzip`))
+            df = readcsv(pipeline(`cat $(testfile)`, `gzip`)) |> DataFrame
             @test df[:col1] == [1, 2]
             @test df[:col2] == [1.0, 2.0]
             @test df[:col3] == ["one", "two"]
@@ -787,7 +788,7 @@ end
             println(buf, "1.1,2.2")
         end
         seekstart(buf)
-        df = readcsv(buf)
+        df = readcsv(buf) |> DataFrame
         @test df[:col1] isa Vector{String}
         @test df[:col2] isa Vector{Union{String,Missing}}
     end
@@ -797,7 +798,7 @@ end
             col1,col1
             1,2
             """
-            df = readcsv(IOBuffer(data))
+            df = readcsv(IOBuffer(data)) |> DataFrame
             @test df[:col1_1] == [2]
     end
 
@@ -810,7 +811,7 @@ end
         col1|col2|col3
         1|2|3
         """
-        df = readdlm(IOBuffer(data), delim = '|')
+        df = readdlm(IOBuffer(data), delim = '|') |> DataFrame
         @test df[:col1] == [1]
         @test df[:col2] == [2]
         @test df[:col3] == [3]
@@ -820,7 +821,7 @@ end
         col1,col2,col3
         `foo`,`bar`,`baz`
         """
-        df = readdlm(IOBuffer(data), delim = ',', quot = '`')
+        df = readdlm(IOBuffer(data), delim = ',', quot = '`') |> DataFrame
         @test df[:col1] == ["foo"]
         @test df[:col2] == ["bar"]
         @test df[:col3] == ["baz"]

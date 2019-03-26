@@ -8,8 +8,6 @@ using Dates:
     @dateformat_str
 using Unicode:
     isletter
-using DataFrames:
-    DataFrame
 using TranscodingStreams:
     TranscodingStreams,
     TranscodingStream,
@@ -316,6 +314,23 @@ function checkformat(stream::IO)
     end
 end
 
+function new_name!(used, name)
+    n, i = name, 1
+    while n in used
+        n = Symbol("$(name)_$i")
+        i += 1
+    end
+    push!(used, n)
+    return n
+end
+
+function to_uniquetuple(names)
+    used = Set{Symbol}()
+    return Tuple(new_name!(used, name) for name in names)
+end
+
+to_namedtuple(cols, names) = NamedTuple{to_uniquetuple(names)}(cols)
+
 # The main function of parsing a character delimited file.
 # `stream` is asuumed to be an input stream of plain text.
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
@@ -375,7 +390,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     _, i = scanline!(tokens, 1, mem, 0, lastnl, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
-        return DataFrame([[] for _ in 1:length(colnames)], colnames, makeunique = true)
+        return to_namedtuple([[] for _ in 1:length(colnames)], colnames)
     elseif i == ncols
         # the header and the first row have the same number of columns
     elseif i == ncols + 1
@@ -490,7 +505,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         end
     end
 
-    return DataFrame(columns, colnames, makeunique = true)
+    return to_namedtuple(columns, colnames)
 end
 
 # Count the number of `byte` in a memory block.
