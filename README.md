@@ -82,11 +82,9 @@ Here is a quick benchmarking result:
 
 ## Installation
 
-This package depends on the latest version of
-[TranscodingStreams.jl][transcodingstreams-url] (v0.9.2 or newer).  Please
-update it if it is older than required, and then add this package as follows:
+Run the following command in the package management mode in your Julia REPL:
 
-    pkg> add https://github.com/bicycle1885/TableReader.jl
+    pkg> add TableReader
 
 
 ## Usage
