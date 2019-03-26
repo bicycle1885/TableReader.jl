@@ -1,0 +1,7 @@
+name = "benchmark"
+
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+CSVFiles = "5d742f6a-9f54-50ce-8119-2520741973ca"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+TableReader = "70df011a-6618-58d7-8e16-3cf9e384cb47"
