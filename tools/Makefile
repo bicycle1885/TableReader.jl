@@ -1,6 +1,7 @@
 RESULTS = \
 	results/diamonds.tablereader.csv \
 	results/diamonds.csv.csv \
+	results/diamonds.csvfiles.csv \
 	results/diamonds.pandas.csv \
 	results/flights14.tablereader.csv \
 	results/flights14.csv.csv \
@@ -15,6 +16,7 @@ RESULTS = \
 	results/parking-citations.pandas.csv \
 	results/tmp0u3qt3mu-notab.tablereader.csv \
 	results/tmp0u3qt3mu-notab.csv.csv \
+	results/tmp0u3qt3mu-notab.csvfiles.csv \
 	results/tmp0u3qt3mu-notab.pandas.csv \
 	results/dge.tablereader.csv \
 	results/dge.pandas.csv
@@ -50,8 +52,14 @@ results/parking-citations.tablereader.csv: data/parking-citations.csv
 results/parking-citations.csv.csv: data/parking-citations.csv
 	julia benchmark.csv.jl $< "(types = Dict(1 => String, 8 => Union{String,Missing}),)" >$@
 
+results/parking-citations.csvfiles.csv: data/parking-citations.csv
+	julia benchmark.csvfiles.jl $< "(colparsers = Dict(1 => String),)" >$@
+
 results/parking-citations.pandas.csv: data/parking-citations.csv
 	python benchmark.py $< '{"low_memory": False}' >$@
+
+results/tmp0u3qt3mu-notab.csvfiles.csv: data/tmp0u3qt3mu-notab.csv
+	julia benchmark.csvfiles.jl $< '(colparsers = Dict(24 => String),)' >$@
 
 results/tmp0u3qt3mu-notab.pandas.csv: data/tmp0u3qt3mu-notab.csv
 	python benchmark.py $< '{"low_memory": False}' >$@
