@@ -1,7 +1,7 @@
 name = "TableReader"
 uuid = "70df011a-6618-58d7-8e16-3cf9e384cb47"
 authors = ["Kenta Sato <bicycle1885@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 CodecXz = "ba30903b-d9e8-5048-a5ec-d1f5b0d4b47b"
