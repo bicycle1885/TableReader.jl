@@ -8,12 +8,12 @@ struct Record
     data::String
 
     function Record(data::String)
-        len = length(data) % UInt64
-        meta = len
+        len = length(data)
+        meta = len % UInt64
         if len > 0
             # mix the first and the last byte
-            meta |= (codeunit(data, 1) % UInt64) << 56
-            meta |= (codeunit(data, len) % UInt64) << 48
+            @inbounds meta |= (codeunit(data,   1) % UInt64) << 56
+            @inbounds meta |= (codeunit(data, len) % UInt64) << 48
         end
         return new(meta, data)
     end
