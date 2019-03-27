@@ -306,9 +306,9 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[TextParse]]
 deps = ["CodecZlib", "DataStructures", "Dates", "DoubleFloats", "Mmap", "Nullables", "PooledArrays", "Random", "Test", "WeakRefStrings"]
-git-tree-sha1 = "e6d0a3b0da281c26e6249ce2ce312215e3e280a0"
+git-tree-sha1 = "cc7aa42aea3490a68552fcdb1df9ce5732a6a4de"
 uuid = "e0df1984-e451-5cb5-8b61-797a481e67e3"
-version = "0.8.0"
+version = "0.9.0"
 
 [[TranscodingStreams]]
 deps = ["Pkg", "Random", "Test"]
