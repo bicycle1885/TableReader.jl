@@ -7,6 +7,8 @@ reader = occursin(".csv", filename) ? readcsv :
          error("the extension of the filename must .csv or .tsv")
 if length(ARGS) ≥ 2
     kwargs = eval(Meta.parse(ARGS[2]))
+else
+    kwargs = ()
 end
 for _ in 1:3
     @time reader(filename; kwargs...)
