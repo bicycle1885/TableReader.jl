@@ -830,3 +830,25 @@ end
         @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = 2^63-1)
     end
 end
+
+@testset "colnames" begin
+    @testset "normalize" begin
+        # integers
+        buffer = IOBuffer("""
+        col.1,col.2,col.3
+        1,23,456
+        """)
+        df = readcsv(buffer,normalizenames=true)
+        @test names(df) == [:col_1, :col_2, :col_3]
+    end
+    @testset "don't normalize" begin
+        # integers
+        buffer = IOBuffer("""
+        col1,col2,col3
+        1,23,456
+        """)
+        df = readcsv(buffer,normalizenames=false)
+        @test names(df) == [:col1, :col2, :col3]
+    end
+
+end

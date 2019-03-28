@@ -55,6 +55,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             skip = 0,
             skipblank = true,
             colnames = nothing,
+            normalizenames = false,
             hasheader = (colnames === nothing),
             chunksize = 1 MiB)
 
@@ -232,13 +233,14 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
+    push!(kwargs, Expr(:kw, :(normalizenames), false))  # skipblank::Bool = false
     push!(kwargs, Expr(:kw, :(hasheader::Bool), :(colnames === nothing)))  # hasheader::Bool = (colnames === nothing)
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 if Sys.which("curl") === nothing
                     throw(ArgumentError("the curl command is not available"))
@@ -251,12 +253,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, hasheader, chunksize)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -488,6 +490,11 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 end
             end
         end
+    end
+
+    # Normalize column names to remove/convert unfriendly characters
+    if params.normalizenames
+        colnames = [normalizename(name) for name in colnames]
     end
 
     return DataFrame(columns, colnames, makeunique = true)
