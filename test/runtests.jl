@@ -833,19 +833,19 @@ end
 
 @testset "colnames" begin
     @testset "normalize" begin
-        # integers
+
         buffer = IOBuffer("""
-        col.1,col.2,col.3
-        1,23,456
+        col.1,col|2,col\$3, col4, do, α,_col7
+        1,2,3,4,5,6,7
         """)
         df = readcsv(buffer,normalizenames=true)
-        @test names(df) == [:col_1, :col_2, :col_3]
+        @show df
+        @test names(df) == [:col_1, :col_2, :col_3,:col4,:_do,:α,:_col7]
     end
     @testset "don't normalize" begin
-        # integers
         buffer = IOBuffer("""
         col1,col2,col3
-        1,23,456
+        1,2,3
         """)
         df = readcsv(buffer,normalizenames=false)
         @test names(df) == [:col1, :col2, :col3]

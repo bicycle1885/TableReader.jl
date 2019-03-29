@@ -124,6 +124,11 @@ the column names are read from the first line just after skipping lines
 specified by `skip` (no lines are skipped by default). Any iterable object is
 allowed.
 
+`normalizenames` uses 'safe' names for Julia symbols used in DataFrames.
+If `normalizenames` is `false` (default), the column names will be the same
+as the source file using basic parsing. If `normalizenames` is `true` then
+reserved words and characters will be removed/replaced in the column names.
+
 `hasheader` specified whether the data has a header line or not. The default
 value is `colnames === nothing` and thus the parser assumes there is a header
 if and only if no column names are specified.
@@ -494,7 +499,8 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
 
     # Normalize column names to remove/convert unfriendly characters
     if params.normalizenames
-        colnames = [normalizename(name) for name in colnames]
+        colnames = [normalizename(String(name)) for name in colnames]
+        @show colnames
     end
 
     return DataFrame(columns, colnames, makeunique = true)
