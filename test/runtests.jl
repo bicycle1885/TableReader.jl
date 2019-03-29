@@ -833,7 +833,7 @@ end
 
 @testset "colnames" begin
     @testset "normalize" begin
-
+        # test unusual or unsafe (for dataframe column names) strings
         buffer = IOBuffer("""
         col.1,col|2,col\$3, col4, do, α,_col7
         1,2,3,4,5,6,7

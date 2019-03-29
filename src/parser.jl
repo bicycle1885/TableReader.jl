@@ -305,13 +305,19 @@ function parse_datetime(col::Vector{Union{String,Missing}}, hasT::Bool)
     return out
 end
 
+# these are Julia keywords used by normalizename to prevent special keywords
+# from becoming column names
 const RESERVED = Set(["local", "global", "export", "let",
     "for", "struct", "while", "const", "continue", "import",
     "function", "if", "else", "try", "begin", "break", "catch",
     "return", "using", "baremodule", "macro", "finally",
     "module", "elseif", "end", "quote", "do"])
-    
+
+
 normalizename(name::Symbol) = name
+
+# normalize name tries to make strings safe for use as Julia symbols and
+# dataframe columns
 function normalizename(name::String)
     uname = strip(Unicode.normalize(name))
     id = Base.isidentifier(uname) ? uname : map(c->Base.is_id_char(c) ? c : '_', uname)

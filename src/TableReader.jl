@@ -500,7 +500,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     # Normalize column names to remove/convert unfriendly characters
     if params.normalizenames
         colnames = [normalizename(String(name)) for name in colnames]
-        @show colnames
     end
 
     return DataFrame(columns, colnames, makeunique = true)
