@@ -839,16 +839,15 @@ end
         1,2,3,4,5,6,7
         """)
         df = readcsv(buffer,normalizenames=true)
-        @show df
         @test names(df) == [:col_1, :col_2, :col_3,:col4,:_do,:α,:_col7]
     end
     @testset "don't normalize" begin
         buffer = IOBuffer("""
-        col1,col2,col3
-        1,2,3
+        col.1,col|2,col\$3, col4, do, α,_col7
+        1,2,3,4,5,6,7
         """)
         df = readcsv(buffer,normalizenames=false)
-        @test names(df) == [:col1, :col2, :col3]
+        @test names(df) == [Symbol("col.1"), Symbol("col|2"), Symbol("col\$3"), :col4, :do, :α, :_col7]
     end
 
 end

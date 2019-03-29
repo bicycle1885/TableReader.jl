@@ -702,5 +702,6 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.readcsv), String})
     precompile(Tuple{typeof(TableReader.readtsv), String})
 end
+_precompile_()
 
 end # module
