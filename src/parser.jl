@@ -120,7 +120,7 @@ function fillcolumn!(col::Vector{Bool}, nvals::Int, mem::Memory, tokens::Matrix{
 end
 
 @inline function parse_bool(mem::Memory, start::Int, length::Int)
-    c = mem[start] 
+    c = mem[start]
     # No need to check all the bytes as the format is already validated.
     return (c == UInt8('f') || c == UInt8('F')) ? false : true
 end
@@ -303,6 +303,12 @@ function parse_datetime(col::Vector{Union{String,Missing}}, hasT::Bool)
     return out
 end
 
+const RESERVED = Set(["local", "global", "export", "let",
+    "for", "struct", "while", "const", "continue", "import",
+    "function", "if", "else", "try", "begin", "break", "catch",
+    "return", "using", "baremodule", "macro", "finally",
+    "module", "elseif", "end", "quote", "do"])
+    
 normalizename(name::Symbol) = name
 function normalizename(name::String)
     uname = strip(Unicode.normalize(name))
