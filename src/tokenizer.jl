@@ -10,13 +10,14 @@ struct ParserParameters
     skip::Int
     skipblank::Bool
     colnames::Union{Vector{Symbol},Nothing}
+    normalizenames::Bool
     hasheader::Bool
     chunksize::Int
 
     function ParserParameters(delim::Char, quot::Char, trim::Bool, lzstring::Bool,
                               skip::Integer, skipblank::Bool,
-                              colnames::Any, hasheader::Bool,
-                              chunksize::Integer)
+                              colnames::Any, normalizenames::Bool,
+                              hasheader::Bool, chunksize::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -45,6 +46,7 @@ struct ParserParameters
             skip,
             skipblank,
             colnames,
+            normalizenames,
             hasheader,
             chunksize,
         )

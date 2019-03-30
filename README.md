@@ -118,6 +118,7 @@ The following parameters are available:
 - `skip`: skip the leading lines
 - `skipblank`: skip blank lines
 - `colnames`: set the column names
+- `normalizenames`:  "normalize" column names into valid Julia (DataFrame) identifier symbols
 - `hasheader`: notify the parser the existence of a header
 - `chunksize`: set the size of a chunk
 

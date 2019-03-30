@@ -830,3 +830,24 @@ end
         @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = 2^63-1)
     end
 end
+
+@testset "colnames" begin
+    @testset "normalize" begin
+        # test unusual or unsafe (for dataframe column names) strings
+        buffer = IOBuffer("""
+        col.1,col|2,col\$3, col4, do, α,_col7
+        1,2,3,4,5,6,7
+        """)
+        df = readcsv(buffer,normalizenames=true)
+        @test names(df) == [:col_1, :col_2, :col_3,:col4,:_do,:α,:_col7]
+    end
+    @testset "don't normalize" begin
+        buffer = IOBuffer("""
+        col.1,col|2,col\$3, col4, do, α,_col7
+        1,2,3,4,5,6,7
+        """)
+        df = readcsv(buffer,normalizenames=false)
+        @test names(df) == [Symbol("col.1"), Symbol("col|2"), Symbol("col\$3"), :col4, :do, :α, :_col7]
+    end
+
+end
