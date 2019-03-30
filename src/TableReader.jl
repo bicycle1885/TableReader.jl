@@ -238,7 +238,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
-    push!(kwargs, Expr(:kw, :(normalizenames), false))  # skipblank::Bool = false
+    push!(kwargs, Expr(:kw, :(normalizenames), false))  # normalizenames::Bool = false
     push!(kwargs, Expr(:kw, :(hasheader::Bool), :(colnames === nothing)))  # hasheader::Bool = (colnames === nothing)
     push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
 
