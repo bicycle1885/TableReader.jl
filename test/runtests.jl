@@ -860,3 +860,168 @@ end
         @test df[:col3] == ["one", "two"]
     end
 end
+
+
+# Field-level test cases
+# ----------------------
+
+function testfield(s::String, expected)
+    data = """
+    col1,col2,col3
+    $(s),$(s),$(s)
+      $(s)  ,  $(s)  ,  $(s)  
+    """
+    df = readcsv(IOBuffer(data))
+    x1, x2 = df[:col1]
+    y1, y2 = df[:col2]
+    z1, z2 = df[:col3]
+    sametype = typeof(x1) == typeof(x2) ==
+               typeof(y1) == typeof(y2) ==
+               typeof(z1) == typeof(z2) ==
+               typeof(expected)
+    if expected isa Float64 && isnan(expected)
+        @test sametype && isnan(x1) && isnan(x2) &&
+                          isnan(y1) && isnan(y2) &&
+                          isnan(z1) && isnan(z2)
+    elseif expected isa Missing
+        @test sametype && ismissing(x1) && ismissing(x2) &&
+                          ismissing(y1) && ismissing(y2) &&
+                          ismissing(z1) && ismissing(z2)
+    else
+        @test sametype && x1 == x2 == y1 == y2 == z1 == z2 == expected
+    end
+end
+
+@testset "checkfield" begin
+    @testset "integer" begin
+        testfield("0", 0)
+        testfield("+0", 0)
+        testfield("-0", 0)
+        testfield("1", 1)
+        testfield("+1", 1)
+        testfield("-1", -1)
+        testfield("12", 12)
+        testfield("+12", 12)
+        testfield("-12", -12)
+        testfield("1234567890", 1234567890)
+        testfield("+1234567890", 1234567890)
+        testfield("-1234567890", -1234567890)
+        testfield("\"1234567890\"", 1234567890)
+        testfield("\"+1234567890\"", 1234567890)
+        testfield("\"-1234567890\"", -1234567890)
+    end
+
+    @testset "float" begin
+        testfield("0.", 0.0)
+        testfield("+0.", 0.0)
+        testfield("-0.", -0.0)
+        testfield("1.", 1.0)
+        testfield("+1.", 1.0)
+        testfield("-1.", -1.0)
+        testfield(".0", 0.0)
+        testfield("+.0", 0.0)
+        testfield("-.0", -0.0)
+        testfield(".1", 0.1)
+        testfield("+.1", 0.1)
+        testfield("-.1", -0.1)
+        testfield("0.0", 0.0)
+        testfield("+0.0", 0.0)
+        testfield("-0.0", -0.0)
+        testfield("1.0", 1.0)
+        testfield("+1.0", 1.0)
+        testfield("-1.0", -1.0)
+        testfield("1.1", 1.1)
+        testfield("+1.1", 1.1)
+        testfield("-1.1", -1.1)
+        testfield("123.4567890", 123.456789)
+        testfield("+123.456789", 123.456789)
+        testfield("-123.456789", -123.456789)
+        testfield("\"-1.23\"", -1.23)
+        testfield("1e3", 1e3)
+        testfield("1e+3", 1e+3)
+        testfield("1e-3", 1e-3)
+        testfield("1E3", 1e3)
+        testfield("1E+3", 1e+3)
+        testfield("1E-3", 1e-3)
+        testfield("+1e3", 1e3)
+        testfield("-1e3", -1e3)
+        testfield("123.45e67", 123.45e67)
+        testfield("123.45e+67", 123.45e67)
+        testfield("123.45e-67", 123.45e-67)
+        testfield("\"1.2e34\"", 1.2e34)
+        testfield("inf", Inf)
+        testfield("iNf", Inf)
+        testfield("INF", Inf)
+        testfield("infinity", Inf)
+        testfield("iNfInItY", Inf)
+        testfield("INFINITY", Inf)
+        testfield("\"inf\"", Inf)
+        testfield("nan", NaN)
+        testfield("nAn", NaN)
+        testfield("NAN", NaN)
+        testfield("\"nan\"", NaN)
+    end
+
+    @testset "bool" begin
+        testfield("t", true)
+        testfield("T", true)
+        testfield("true", true)
+        testfield("True", true)
+        testfield("TrUe", true)
+        testfield("TRUE", true)
+        testfield("\"t\"", true)
+        testfield("\"true\"", true)
+        testfield("f", false)
+        testfield("F", false)
+        testfield("false", false)
+        testfield("False", false)
+        testfield("FaLsE", false)
+        testfield("FALSE", false)
+        testfield("\"f\"", false)
+        testfield("\"false\"", false)
+    end
+
+    @testset "missing" begin
+        testfield("", missing)
+        testfield("\"\"", missing)
+        testfield("NA", missing)
+        testfield("\"NA\"", missing)
+    end
+
+    @testset "string" begin
+        testfield("!", "!")
+        testfield("~", "~")
+        testfield(".", ".")
+        testfield("..", "..")
+        testfield("+", "+")
+        testfield("-+", "-+")
+        testfield("i", "i")
+        testfield("I", "I")
+        testfield("n", "n")
+        testfield("N", "N")
+        testfield("+12!", "+12!")
+        testfield("-12!", "-12!")
+        testfield("0!", "0!")
+        testfield("1!", "1!")
+        testfield("0..", "0..")
+        testfield("1..", "1..")
+        testfield("1.2.", "1.2.")
+        testfield("0123", "0123")
+        testfield("1e", "1e")
+        testfield("1ea", "1ea")
+        testfield("1e-", "1e-")
+        testfield("1e+", "1e+")
+        testfield("1e-!", "1e-!")
+        testfield("1e+!", "1e+!")
+        testfield("123 456", "123 456")
+        testfield("Inf0", "Inf0")
+        testfield("Infinity0", "Infinity0")
+        testfield("t0", "t0")
+        testfield("f0", "f0")
+        testfield("true0", "true0")
+        testfield("false0", "false0")
+        testfield("\"a\"", "a")
+        testfield("\"\"\"\"", "\"")
+        testfield("\"\"\"\"\"\"", "\"\"")
+    end
+end
