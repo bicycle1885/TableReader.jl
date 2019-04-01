@@ -253,7 +253,10 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                     throw(ArgumentError("the curl command is not available"))
                 end
                 # read a remote file using curl
-                return open(proc -> readdlm_internal(wrapstream(proc, params), params), `$(curl) --silent $(filename)`)
+                return open(
+                    proc -> readdlm_internal(wrapstream(proc, params), params),
+                    `$(curl) --silent --location --globoff $(filename)`,
+                )
             end
             # read a local file
             return open(file -> readdlm_internal(wrapstream(file, params), params), filename)
