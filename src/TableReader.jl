@@ -35,6 +35,7 @@ const LF = UInt8('\n')
 include("stringcache.jl")
 include("tokenizer.jl")
 include("parser.jl")
+include("download.jl")
 
 const DEFAULT_CHUNK_SIZE =  1 * 2^20  #  1 MiB
 const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
@@ -247,11 +248,12 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         function $(fname)(filename::AbstractString; $(kwargs...))
             params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
             if occursin(r"^\w+://", filename)  # URL-like filename
-                if Sys.which("curl") === nothing
+                curl = find_curl()
+                if curl === nothing
                     throw(ArgumentError("the curl command is not available"))
                 end
                 # read a remote file using curl
-                return open(proc -> readdlm_internal(wrapstream(proc, params), params), `curl --silent $(filename)`)
+                return open(proc -> readdlm_internal(wrapstream(proc, params), params), `$(curl) --silent $(filename)`)
             end
             # read a local file
             return open(file -> readdlm_internal(wrapstream(file, params), params), filename)
