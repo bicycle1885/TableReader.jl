@@ -800,7 +800,6 @@ end
             df = readcsv(IOBuffer(data))
             @test df[:col1_1] == [2]
     end
-
 end
 
 @testset "readdlm" begin
@@ -849,5 +848,15 @@ end
         df = readcsv(buffer,normalizenames=false)
         @test names(df) == [Symbol("col.1"), Symbol("col|2"), Symbol("col\$3"), :col4, :do, :α, :_col7]
     end
+end
 
+@testset "download" begin
+    if Sys.which("curl") === nothing
+        @info "Skipped file downloading tests"
+    else
+        df = readcsv("https://raw.githubusercontent.com/bicycle1885/TableReader.jl/master/test/test.csv")
+        @test df[:col1] == [1, 2]
+        @test df[:col2] == [1.0, 2.0]
+        @test df[:col3] == ["one", "two"]
+    end
 end
