@@ -1,6 +1,6 @@
 using SnoopCompile
 
-SnoopCompile.@snoop "compiles.csv" begin
+SnoopCompile.@snoopc "compiles.csv" begin
     using TableReader
     readcsv("test/test.csv")
     readtsv("test/test.tsv")
