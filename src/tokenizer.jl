@@ -9,13 +9,14 @@ struct ParserParameters
     lzstring::Bool
     skip::Int
     skipblank::Bool
+    comment::String
     colnames::Union{Vector{Symbol},Nothing}
     normalizenames::Bool
     hasheader::Bool
     chunkbits::Int
 
     function ParserParameters(delim::Char, quot::Char, trim::Bool, lzstring::Bool,
-                              skip::Integer, skipblank::Bool,
+                              skip::Integer, skipblank::Bool, comment::String,
                               colnames::Any, normalizenames::Bool,
                               hasheader::Bool, chunkbits::Integer)
         if delim ∉ ALLOWED_DELIMITERS
@@ -45,6 +46,7 @@ struct ParserParameters
             lzstring,
             skip,
             skipblank,
+            comment,
             colnames,
             normalizenames,
             hasheader,
