@@ -470,7 +470,7 @@ using Test
     end
 
     @testset "invalid argument" begin
-        @test_throws ArgumentError readtsv(IOBuffer(""), chunksize = -1)
+        @test_throws ArgumentError readtsv(IOBuffer(""), chunkbits = -1)
     end
 
     @testset "large data" begin
@@ -495,7 +495,7 @@ using Test
         @test df[:col2] == 1:m
 
         # without chunking
-        df = readtsv(IOBuffer(data), chunksize = 0)
+        df = readtsv(IOBuffer(data), chunkbits = 0)
         @test size(df) == (m, n + 1)
         @test df[:name] == ["row$(i)" for i in 1:m]
         @test df[:col1] == 1:m
@@ -824,9 +824,9 @@ end
         @test df[:col2] == ["bar"]
         @test df[:col3] == ["baz"]
 
-        # invalid chunksize
-        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = -1)
-        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunksize = 2^63-1)
+        # invalid chunkbits
+        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunkbits = -1)
+        @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunkbits = 100)
     end
 end
 

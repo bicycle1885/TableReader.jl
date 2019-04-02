@@ -37,8 +37,10 @@ include("tokenizer.jl")
 include("parser.jl")
 include("download.jl")
 
-const DEFAULT_CHUNK_SIZE =  1 * 2^20  #  1 MiB
-const MINIMUM_CHUNK_SIZE = 16 * 2^10  # 16 KiB
+# logarithm of base two
+const MINIMUM_CHUNK_BITS = 14  # 16 KiB
+const DEFAULT_CHUNK_BITS = 20  #  1 MiB
+const MAXIMUM_CHUNK_BITS = 36  # 64 GiB
 
 # Printable characters
 const CHARS_PRINT = ' ':'~'
@@ -58,7 +60,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
             colnames = nothing,
             normalizenames = false,
             hasheader = (colnames === nothing),
-            chunksize = 1 MiB)
+            chunkbits = 20  #= 1 MiB =#)
 
 Read a character delimited text file.
 
@@ -192,9 +194,10 @@ readcsv(`iconv -f sjis -t utf8 somefile.csv`)
 ```
 
 A text file will be read chunk by chunk to save memory. The chunk size is
-specified by the `chunksize` parameter, which is set to 1 MiB by default.  The
+specified by the `chunkbits` parameter, which is the base two logarithm of
+actual chunk size.  The default value is 20 (i.e., 2^20 bytes = 1 MiB).  The
 data type of each column is guessed from the values in the first chunk.  If
-`chunksize` is set to zero, it disables chunking and the data types are guessed
+`chunkbits` is set to zero, it disables chunking and the data types are guessed
 from all rows. The chunk size will be automatically expanded when it is
 required to store long lines.
 
@@ -241,12 +244,19 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
     push!(kwargs, Expr(:kw, :(normalizenames), false))  # normalizenames::Bool = false
     push!(kwargs, Expr(:kw, :(hasheader::Bool), :(colnames === nothing)))  # hasheader::Bool = (colnames === nothing)
-    push!(kwargs, Expr(:kw, :(chunksize::Integer), DEFAULT_CHUNK_SIZE))  # chunksize::Integer = DEFAULT_CHUNK_SIZE
+    push!(kwargs, Expr(:kw, :(chunkbits::Integer), DEFAULT_CHUNK_BITS))  # chunkbits::Integer = DEFAULT_CHUNK_BITS
+
+    # deprecated parameter
+    push!(kwargs, Expr(:kw, :(chunksize::Union{Integer,Nothing}), nothing))
 
     # generate methods
     @eval begin
         function $(fname)(filename::AbstractString; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
+            if chunksize !== nothing
+                @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
+                chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
+            end
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 curl = find_curl()
                 if curl === nothing
@@ -263,12 +273,20 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
         end
 
         function $(fname)(cmd::Base.AbstractCmd; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
+            if chunksize !== nothing
+                @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
+                chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
+            end
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
         function $(fname)(file::IO; $(kwargs...))
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunksize)
+            if chunksize !== nothing
+                @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
+                chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
+            end
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -276,12 +294,12 @@ end
 
 # Wrap a stream by TranscodingStream.
 function wrapstream(stream::IO, params::ParserParameters)
-    bufsize = max(params.chunksize, MINIMUM_CHUNK_SIZE)
+    bufsize = 2^max(params.chunkbits, MINIMUM_CHUNK_BITS)
     if !applicable(mark, stream) || !applicable(reset, stream)
         stream = NoopStream(stream, bufsize = bufsize)
     end
     format = checkformat(stream)
-    if params.chunksize != 0
+    if params.chunkbits != 0
         # with chunking
         if format == :gzip
             return GzipDecompressorStream(stream, bufsize = bufsize)
@@ -466,7 +484,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                     throw(ReadError(string(
                         "type guessing failed at column $(i) ",
                         "(guessed to be $(S) but found records of $(T)); ",
-                        "try larger chunksize or chunksize = 0 to disable chunking")))
+                        "try larger chunkbits or chunkbits = 0 to disable chunking")))
                 end
                 n_rows = length(col)
                 if T <: S

@@ -12,12 +12,12 @@ struct ParserParameters
     colnames::Union{Vector{Symbol},Nothing}
     normalizenames::Bool
     hasheader::Bool
-    chunksize::Int
+    chunkbits::Int
 
     function ParserParameters(delim::Char, quot::Char, trim::Bool, lzstring::Bool,
                               skip::Integer, skipblank::Bool,
                               colnames::Any, normalizenames::Bool,
-                              hasheader::Bool, chunksize::Integer)
+                              hasheader::Bool, chunkbits::Integer)
         if delim ∉ ALLOWED_DELIMITERS
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -30,10 +30,10 @@ struct ParserParameters
             throw(ArgumentError("quoting with space and space trimming are exclusive"))
         elseif skip < 0
             throw(ArgumentError("skip cannot be negative"))
-        elseif chunksize < 0
-            throw(ArgumentError("chunk size cannot be negative"))
-        elseif chunksize > MAX_TOKEN_START
-            throw(ArgumentError("chunk size must be smaller than or equal to $(MAX_TOKEN_START)"))
+        elseif chunkbits < 0
+            throw(ArgumentError("chunkbits cannot be negative"))
+        elseif chunkbits != 0 && !(MINIMUM_CHUNK_BITS ≤ chunkbits ≤ MAXIMUM_CHUNK_BITS)
+            throw(ArgumentError("chunkbits must be zero or between $(MINIMUM_CHUNK_BITS) and $(MAXIMUM_CHUNK_BITS) (inclusive)"))
         end
         if colnames != nothing
             colnames = Symbol.(collect(colnames))
@@ -48,7 +48,7 @@ struct ParserParameters
             colnames,
             normalizenames,
             hasheader,
-            chunksize,
+            chunkbits,
         )
     end
 end

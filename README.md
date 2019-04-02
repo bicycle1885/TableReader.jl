@@ -120,7 +120,7 @@ The following parameters are available:
 - `colnames`: set the column names
 - `normalizenames`:  "normalize" column names into valid Julia (DataFrame) identifier symbols
 - `hasheader`: notify the parser the existence of a header
-- `chunksize`: set the size of a chunk
+- `chunkbits`: set the size of a chunk
 
 See the docstring of `readdlm` for more details.
 
@@ -166,8 +166,8 @@ encounter situation where most values in a column look like integers but only
 few are not parsable as integers. If you are bad luck, such anomalies are not
 in the first chunk and type guessing may fail. Consequently, parsing will also
 fail when the parser sees the first occurrence.  To avoid the problem, you can
-turn off the chunking behavior by setting the `chunksize` parameter to zero.
-For example, `readcsv("somefile.csv", chunksize = 0)` will read the whole file
+turn off the chunking behavior by setting the `chunkbits` parameter to zero.
+For example, `readcsv("somefile.csv", chunkbits = 0)` will read the whole file
 into memory as a single large chunk and the data types of columns are guessed
 from all of the fields.  While this requires more memories, you will never see
 parsing error due to the failure of type guessing.
