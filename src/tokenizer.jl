@@ -189,13 +189,13 @@ macro endheadertoken()
     end |> esc
 end
 
-function scanheader(mem::Memory, lastnl::Int, params::ParserParameters)
+function scanheader(mem::Memory, params::ParserParameters)
     # Check parameters.
     delim, quot, trim = params.delim, params.quot, params.trim
     @assert delim != quot
     @assert !trim || delim != SP
     @assert !trim || quot != SP
-    @assert mem[lastnl] == CR || mem[lastnl] == LF
+    @assert mem[end] == CR || mem[end] == LF
 
     # Initialize variables.
     tokens = Token[]
@@ -204,7 +204,7 @@ function scanheader(mem::Memory, lastnl::Int, params::ParserParameters)
     qstring = false
     pos = 0
     start = 0
-    pos_end = lastnl
+    pos_end = lastindex(mem)
 
     @state BEGIN begin
         @begintoken
@@ -382,7 +382,7 @@ function scanline!(
         # output info
         tokens::Matrix{Token}, row::Int,
         # input info
-        mem::Memory, pos::Int, lastnl::Int, line::Int,
+        mem::Memory, pos::Int, line::Int,
         # parser parameters
         params::ParserParameters
     )
@@ -392,10 +392,10 @@ function scanline!(
     @assert delim != quot
     @assert !trim || delim != SP
     @assert !trim || quot != SP
-    @assert mem[lastnl] == CR || mem[lastnl] == LF
+    @assert length(mem) > 0 && (mem[end] == CR || mem[end] == LF)
 
     # Initialize variables.
-    pos_end = lastnl
+    pos_end = lastindex(mem)
     ncols = size(tokens, 1)
     quoted = false
     qstring = false
@@ -1052,7 +1052,7 @@ function scanline!(
         pos += 1
         # fall through
     elseif quoted
-        if pos == lastnl
+        if pos == pos_end
             # need more data
             return 0, 0
         end
@@ -1064,7 +1064,7 @@ function scanline!(
 
     @label LF  # line feed
     if quoted
-        if pos == lastnl
+        if pos == pos_end
             # need more data
             return 0, 0
         end

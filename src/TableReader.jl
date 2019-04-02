@@ -354,11 +354,11 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     if params.skipblank
         line += skipblanlines(stream, params.trim)
     end
-    mem, lastnl = bufferlines(stream)
+    mem = bufferlines(stream)
     if params.hasheader
         if params.colnames === nothing
             # Scan the header line to get the column names
-            n, headertokens = scanheader(mem, lastnl, params)
+            n, headertokens = scanheader(mem, params)
             skip(stream, n)
             if length(headertokens) == 1 && length(headertokens[1]) == 0  # zero-length token
                 throw(ReadError("found no column names in the header at line $(line)"))
@@ -388,7 +388,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             # count the number of columns from data
             n_max_cols = countbytesline(mem, params.delim) + 1
             _, n_cols = scanline!(
-                Array{Token}(undef, (n_max_cols, 1)), 1, mem, 0, lastnl, line, params)
+                Array{Token}(undef, (n_max_cols, 1)), 1, mem, 0, line, params)
             colnames = [Symbol("X", i) for i in 1:n_cols]
         else
             colnames = params.colnames
@@ -400,9 +400,9 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     if params.skipblank
         line += skipblanlines(stream, params.trim)
     end
-    mem, lastnl = bufferlines(stream)
+    mem = bufferlines(stream)
     tokens = Array{Token}(undef, (ncols + 1, 1))
-    _, i = scanline!(tokens, 1, mem, 0, lastnl, line, params)
+    _, i = scanline!(tokens, 1, mem, 0, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
         return DataFrame([[] for _ in 1:length(colnames)], colnames, makeunique = true)
@@ -428,11 +428,11 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     columns = Vector[]
     while !eof(stream)
         # Tokenize data.
-        mem, lastnl = bufferlines(stream)
+        mem = bufferlines(stream)
         pos = 0
         n_new_rows = 0
-        while pos < lastnl && n_new_rows < n_chunk_rows
-            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, lastnl, line, params)
+        while pos < lastindex(mem) && n_new_rows < n_chunk_rows
+            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, line, params)
             if pos == 0
                 break
             elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
@@ -594,10 +594,10 @@ end
 function skiplines(stream::TranscodingStream, skip::Int)
     skipped = 0
     while skipped < skip && !eof(stream)
-        mem, lastnl = bufferlines(stream)
+        mem = bufferlines(stream)
         # find the first newline
         i = 1
-        while i ≤ lastnl
+        while i ≤ lastindex(mem)
             @inbounds x = mem[i]
             if x == CR
                 if i + 1 ≤ lastindex(mem) && mem[i+1] == LF
@@ -619,8 +619,8 @@ end
 function skipblanlines(stream::TranscodingStream, trim::Bool)
     skipped = 0
     while !eof(stream)
-        mem, lastnl = bufferlines(stream)
-        @assert lastnl > 0
+        mem = bufferlines(stream)
+        @assert length(mem) > 0
         i = 1
         if trim
             while i ≤ lastindex(mem) && mem[i] == SP
@@ -688,40 +688,44 @@ function bufferlines(stream::TranscodingStream)
         end
     end
     @assert lastnl > 0 && (mem[lastnl] == CR || mem[lastnl] == LF)
-    return mem, lastnl
+    return Memory(mem.ptr, lastnl)
 end
 
 # Generated from tools/snoop.jl.
 function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
-    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, Int64, TableReader.ParserParameters})
-    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, Int64, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.bufferlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
-    precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
+    precompile(Tuple{getfield(TableReader, Symbol("##24#29")), Base.Process})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Float64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
-    precompile(Tuple{typeof(TableReader.skipblanlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, Bool})
     precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
+    precompile(Tuple{typeof(TableReader.skipblanlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, Bool})
     precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.summarizecolumns), Array{TableReader.Token, 2}, Int64})
     precompile(Tuple{typeof(TableReader.parse_date), Array{String, 1}})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.Process}})
     precompile(Tuple{typeof(TableReader.parse_datetime), Array{String, 1}, Bool})
-    precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.ParserParameters})
-    precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.ParserParameters})
-    precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
     precompile(Tuple{typeof(TableReader.allocate!), TableReader.StringCache, Ptr{UInt8}, Int64})
-    precompile(Tuple{typeof(TableReader.is_datetime_like), Array{String, 1}})
-    precompile(Tuple{typeof(TableReader.is_date_like), Array{String, 1}})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.ParserParameters})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{String, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
-    precompile(Tuple{typeof(TableReader.parse_datetime), Array{Union{Base.Missing, String}, 1}, Bool})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.ParserParameters})
+    precompile(Tuple{getfield(TableReader, Symbol("##25#30")), Base.IOStream})
+    precompile(Tuple{typeof(TableReader.is_date_like), Array{String, 1}})
+    precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
+    precompile(Tuple{typeof(TableReader.is_datetime_like), Array{String, 1}})
     precompile(Tuple{typeof(TableReader.countbytes), TranscodingStreams.Memory, UInt8})
+    precompile(Tuple{typeof(TableReader.parse_datetime), Array{Union{Base.Missing, String}, 1}, Bool})
+    precompile(Tuple{getfield(TableReader, Symbol("##readcsv#14")), Char, Char, Bool, Bool, Int64, Bool, Nothing, Bool, Bool, Int64, Nothing, typeof(TableReader.readcsv), String})
+    precompile(Tuple{getfield(TableReader, Symbol("##readtsv#23")), Char, Char, Bool, Bool, Int64, Bool, Nothing, Bool, Bool, Int64, Nothing, typeof(TableReader.readtsv), String})
     precompile(Tuple{typeof(TableReader.parse_date), Array{Union{Base.Missing, String}, 1}})
-    precompile(Tuple{getfield(TableReader, Symbol("##readcsv#14")), Char, Char, Bool, Bool, Int64, Bool, Nothing, Bool, Bool, Int64, typeof(TableReader.readcsv), String})
     precompile(Tuple{typeof(TableReader.normalizename), String})
     precompile(Tuple{typeof(TableReader.skiplines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, Int64})
-    precompile(Tuple{getfield(TableReader, Symbol("##readtsv#23")), Char, Char, Bool, Bool, Int64, Bool, Nothing, Bool, Bool, Int64, typeof(TableReader.readtsv), String})
+    precompile(Tuple{getfield(TableReader, Symbol("##16#21")), Base.IOStream})
+    precompile(Tuple{getfield(TableReader, Symbol("##15#20")), Base.Process})
     precompile(Tuple{typeof(TableReader.readcsv), String})
     precompile(Tuple{typeof(TableReader.readtsv), String})
 end
