@@ -1025,3 +1025,18 @@ end
         testfield("\"\"\"\"\"\"", "\"\"")
     end
 end
+
+# Deprecated feature
+@testset "deprecated" begin
+    @info "Testing deprecated features"
+
+    @testset "chunksize" begin
+        data = """
+        col1,col2
+        1,2
+        """
+        df = readcsv(IOBuffer(data), chunksize = 0)
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+    end
+end
