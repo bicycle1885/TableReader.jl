@@ -8,7 +8,7 @@ struct Record
     data::String
 
     function Record(data::String)
-        len = length(data)
+        len = sizeof(data)
         meta = len % UInt64
         if len > 0
             # mix the first and the last byte
