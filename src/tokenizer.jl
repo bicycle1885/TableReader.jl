@@ -138,7 +138,7 @@ end
 macro multibytestring()
     quote
         # multibyte UTF8 character
-        if 0b110_00000 ≤ c ≤ 0b110_11111
+        @inbounds if 0b110_00000 ≤ c ≤ 0b110_11111
             if pos + 1 ≤ pos_end && (mem[pos+1] >> 6) ≤ 0b10  # same as: 0b10_000000 ≤ mem[pos+1] ≤ 0b10_111111
                 pos += 1
                 @goto STRING
