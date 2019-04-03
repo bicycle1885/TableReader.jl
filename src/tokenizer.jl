@@ -414,7 +414,15 @@ function scanline!(
         end
         if q > sizeof(params.comment)
             # found a line starting with a comment sequence
-            return pos + q - 1, i, true
+            while pos + q ≤ lastindex(mem) && mem[pos+q] != CR && mem[pos+q] != LF
+                q += 1
+            end
+            if pos + q + 1 ≤ lastindex(mem) && mem[pos+q] == CR && mem[pos+q+1] == LF
+                pos += q + 1
+            else
+                pos += q
+            end
+            return pos, 0, true
         end
     end
 

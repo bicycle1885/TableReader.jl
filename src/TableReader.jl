@@ -435,9 +435,6 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             elseif skip  # blank or comment
                 line += 1
                 continue
-            #elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
-            #    line += 1
-            #    continue
             elseif i != ncols
                 throw(ReadError("unexpected number of columns at line $(line)"))
             end
@@ -662,8 +659,7 @@ function skipcommentlines(stream::TranscodingStream, comment::String)
     @assert !isempty(comment)
     skipped = 0
     while !eof(stream)
-        mem, lastnl = bufferlines(stream)
-        @assert lastnl > 0
+        mem = bufferlines(stream)
         i = 1
         while i ≤ lastindex(mem) &&
                 i ≤ sizeof(comment) &&
