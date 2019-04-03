@@ -402,11 +402,24 @@ function scanline!(
     quoted = false
     qstring = false
     token = TOKEN_NULL
+    blank = true  # blank line?
     msg = ""  # error message
     start = 0  # the starting position of a token
     i = 1  # the column of a token
 
+    if !isempty(params.comment)
+        q = 1
+        while pos + q ≤ lastindex(mem) && q ≤ sizeof(params.comment) && mem[pos+q] == codeunit(params.comment, q)
+            q += 1
+        end
+        if q > sizeof(params.comment)
+            # found a line starting with a comment sequence
+            return pos + q - 1, i, true
+        end
+    end
+
     @state BEGIN begin
+        blank &= (params.trim && c == SP) || c == CR || c == LF
         @begintoken
         if c == quot
             if quoted
@@ -1054,9 +1067,10 @@ function scanline!(
         pos += 1
         # fall through
     elseif quoted
+        # maybe a quoted multiline string
         if pos == pos_end
             # need more data
-            return 0, 0
+            return 0, 0, false
         end
         @goto STRING
     else
@@ -1066,9 +1080,10 @@ function scanline!(
 
     @label LF  # line feed
     if quoted
+        # maybe a quoted multiline string
         if pos == pos_end
             # need more data
-            return 0, 0
+            return 0, 0, false
         end
         @goto STRING
     else
@@ -1077,5 +1092,5 @@ function scanline!(
     end
 
     @label END
-    return pos, i - 1
+    return pos, i - 1, params.skipblank && blank
 end

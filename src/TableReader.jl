@@ -386,7 +386,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         if params.colnames === nothing
             # count the number of columns from data
             n_max_cols = countbytesline(mem, params.delim) + 1
-            _, n_cols = scanline!(
+            _, n_cols, _ = scanline!(
                 Array{Token}(undef, (n_max_cols, 1)), 1, mem, 0, line, params)
             colnames = [Symbol("X", i) for i in 1:n_cols]
         else
@@ -399,7 +399,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     line += skip_unwanted_lines(stream, params)
     mem = bufferlines(stream)
     tokens = Array{Token}(undef, (ncols + 1, 1))
-    _, i = scanline!(tokens, 1, mem, 0, line, params)
+    _, i, _ = scanline!(tokens, 1, mem, 0, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
         return DataFrame([[] for _ in 1:length(colnames)], colnames, makeunique = true)
@@ -429,12 +429,15 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         pos = 0
         n_new_rows = 0
         while pos < lastindex(mem) && n_new_rows < n_chunk_rows
-            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, line, params)
+            pos, i, skip = scanline!(tokens, n_new_rows + 1, mem, pos, line, params)
             if pos == 0
                 break
-            elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
+            elseif skip  # blank or comment
                 line += 1
                 continue
+            #elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
+            #    line += 1
+            #    continue
             elseif i != ncols
                 throw(ReadError("unexpected number of columns at line $(line)"))
             end
@@ -443,7 +446,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         end
         if n_new_rows == 0
             # only blank lines
-            skip(stream, pos)
+            Base.skip(stream, pos)
             continue
         end
 
@@ -492,7 +495,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
             end
         end
-        skip(stream, pos)
+        Base.skip(stream, pos)
     end
 
     # Parse strings as date or datetime objects.
@@ -685,9 +688,6 @@ function skipcommentlines(stream::TranscodingStream, comment::String)
         skipped += 1
     end
     return skipped
-end
-
-function starts_with(mem::Memory, comment::String)
 end
 
 # Buffer lines and return the memory view and the last newline position.
