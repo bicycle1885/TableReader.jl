@@ -442,7 +442,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
             line += 1
         end
         if n_new_rows == 0
-            # only blank lines
+            # only blank or comment lines
             Base.skip(stream, pos)
             continue
         end
