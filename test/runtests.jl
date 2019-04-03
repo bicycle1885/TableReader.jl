@@ -716,6 +716,37 @@ end
         @test df[:col3] == [3]
     end
 
+    @testset "comment" begin
+        data = """
+        # comment before header
+        col1,col2
+        # comment after header
+        1,2
+        # comment among data
+        3,4
+        # comment after data
+        """
+        df = readcsv(IOBuffer(data), comment = "#")
+        @test df[:col1] == [1, 3]
+        @test df[:col2] == [2, 4]
+
+        data = """
+        ## comment before header
+        col1,col2
+        ## comment after header
+        foo,bar
+        ## comment among data
+        #foo,#bar
+        ## comment after data
+        """
+        df = readcsv(IOBuffer(data), comment = "##")
+        @test df[:col1] == ["foo", "#foo"]
+        @test df[:col2] == ["bar", "#bar"]
+
+        @test_throws ArgumentError("comment cannot contain newline characters") readcsv(IOBuffer(data), comment = "\n")
+        @test_throws ArgumentError("comment cannot contain newline characters") readcsv(IOBuffer(data), comment = "\r")
+    end
+
     @testset "malformed data" begin
         # empty
         @test_throws TableReader.ReadError("found no column names in the header at line 1") readcsv(IOBuffer(""))

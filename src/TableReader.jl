@@ -119,6 +119,10 @@ line just after the skipped lines is considered as a header line if the
 `skipblank` specifies whether the parser ignores blank lines. If `skipblank` is
 false, encountering a blank line throws an exception.
 
+`comment` specifies the leading sequence of comment lines. If it is a non-empty
+string, text lines that start with the sequence will be skipped as comments.
+The default value (empty string) does not skip any lines as comments.
+
 
 ## Column names
 
@@ -241,6 +245,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     push!(kwargs, Expr(:kw, :(lzstring::Bool), true))  # lzstring::Bool = true
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
     push!(kwargs, Expr(:kw, :(skipblank::Bool), true))  # skipblank::Bool = true
+    push!(kwargs, Expr(:kw, :(comment::AbstractString), ""))  # command::AbstractString = ""
     push!(kwargs, Expr(:kw, :(colnames), nothing))  # colnames = nothing
     push!(kwargs, Expr(:kw, :(normalizenames), false))  # normalizenames::Bool = false
     push!(kwargs, Expr(:kw, :(hasheader::Bool), :(colnames === nothing)))  # hasheader::Bool = (colnames === nothing)
@@ -256,7 +261,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 curl = find_curl()
                 if curl === nothing
@@ -277,7 +282,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
@@ -286,7 +291,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, colnames, normalizenames, hasheader, chunkbits)
+            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
@@ -351,9 +356,7 @@ end
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     # Determine column names
     line = skiplines(stream, params.skip) + 1
-    if params.skipblank
-        line += skipblanlines(stream, params.trim)
-    end
+    line += skip_unwanted_lines(stream, params)
     mem = bufferlines(stream)
     if params.hasheader
         if params.colnames === nothing
@@ -387,7 +390,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         if params.colnames === nothing
             # count the number of columns from data
             n_max_cols = countbytesline(mem, params.delim) + 1
-            _, n_cols = scanline!(
+            _, n_cols, _ = scanline!(
                 Array{Token}(undef, (n_max_cols, 1)), 1, mem, 0, line, params)
             colnames = [Symbol("X", i) for i in 1:n_cols]
         else
@@ -397,12 +400,10 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     ncols = length(colnames)
 
     # Scan the next line to get the number of data columns
-    if params.skipblank
-        line += skipblanlines(stream, params.trim)
-    end
+    line += skip_unwanted_lines(stream, params)
     mem = bufferlines(stream)
     tokens = Array{Token}(undef, (ncols + 1, 1))
-    _, i = scanline!(tokens, 1, mem, 0, line, params)
+    _, i, _ = scanline!(tokens, 1, mem, 0, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
         return DataFrame([[] for _ in 1:length(colnames)], colnames, makeunique = true)
@@ -432,22 +433,21 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         pos = 0
         n_new_rows = 0
         while pos < lastindex(mem) && n_new_rows < n_chunk_rows
-            pos, i = scanline!(tokens, n_new_rows + 1, mem, pos, line, params)
+            pos, i, skip = scanline!(tokens, n_new_rows + 1, mem, pos, line, params)
             if pos == 0
                 break
-            elseif params.skipblank && i == 1 && length(tokens[1,n_new_rows+1]) == 0
+            elseif skip  # blank or comment
                 line += 1
                 continue
             elseif i != ncols
                 throw(ReadError("unexpected number of columns at line $(line)"))
-            else
             end
             n_new_rows += 1
             line += 1
         end
         if n_new_rows == 0
-            # only blank lines
-            skip(stream, pos)
+            # only blank or comment lines
+            Base.skip(stream, pos)
             continue
         end
 
@@ -496,7 +496,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                 columns[i] = fillcolumn!(col, n_new_rows, mem, tokens, i, params.quot)
             end
         end
-        skip(stream, pos)
+        Base.skip(stream, pos)
     end
 
     # Parse strings as date or datetime objects.
@@ -615,8 +615,26 @@ function skiplines(stream::TranscodingStream, skip::Int)
     return skipped
 end
 
+# Skip blank and/or comment lines if required.
+function skip_unwanted_lines(stream::TranscodingStream, params::ParserParameters)
+    skipped = 0
+    @label loop
+    n = 0
+    if params.skipblank
+        n += skipblanklines(stream, params.trim)
+    end
+    if !isempty(params.comment)
+        n += skipcommentlines(stream, params.comment)
+    end
+    if n > 0
+        skipped += n
+        @goto loop
+    end
+    return skipped
+end
+
 # Skip blank lines.
-function skipblanlines(stream::TranscodingStream, trim::Bool)
+function skipblanklines(stream::TranscodingStream, trim::Bool)
     skipped = 0
     while !eof(stream)
         mem = bufferlines(stream)
@@ -634,6 +652,38 @@ function skipblanlines(stream::TranscodingStream, trim::Bool)
         else
             # found a non-blank line
             break
+        end
+        skipped += 1
+    end
+    return skipped
+end
+
+# Skip comment lines.
+function skipcommentlines(stream::TranscodingStream, comment::String)
+    @assert !isempty(comment)
+    skipped = 0
+    while !eof(stream)
+        mem = bufferlines(stream)
+        i = 1
+        while i ≤ lastindex(mem) &&
+                i ≤ sizeof(comment) &&
+                mem[i] != CR &&
+                mem[i] != LF &&
+                mem[i] == codeunit(comment, i)
+            i += 1
+        end
+        if i ≤ sizeof(comment)
+            # found a non-comment line
+            break
+        end
+        # found a comment; skip the current newline
+        while i ≤ lastindex(mem) && mem[i] != CR && mem[i] != LF
+            i += 1
+        end
+        if i + 1 ≤ lastindex(mem) && mem[i] == CR && mem[i+1] == LF
+            skip(stream, i + 1)
+        elseif i ≤ lastindex(mem) && (mem[i] == CR || mem[i] == LF)
+            skip(stream, i)
         end
         skipped += 1
     end
@@ -691,6 +741,7 @@ function bufferlines(stream::TranscodingStream)
     return Memory(mem.ptr, lastnl)
 end
 
+#=
 # Generated from tools/snoop.jl.
 function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
@@ -730,5 +781,6 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.readtsv), String})
 end
 _precompile_()
+=#
 
 end # module

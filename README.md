@@ -117,6 +117,7 @@ The following parameters are available:
 - `lzstring`: parse excess leading zeros as strings
 - `skip`: skip the leading lines
 - `skipblank`: skip blank lines
+- `comment`: specify the leading sequence of comment lines
 - `colnames`: set the column names
 - `normalizenames`:  "normalize" column names into valid Julia (DataFrame) identifier symbols
 - `hasheader`: notify the parser the existence of a header
