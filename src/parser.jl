@@ -147,7 +147,7 @@ function fillcolumn!(col::Vector{String}, nvals::Int, mem::Memory, tokens::Matri
             s = unsafe_string(mem.ptr + start - 1, length)
         end
         col[end-nvals+i] = s
-        if usecache && i % 4096 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
+        if usecache && i % 512 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
             # stop using cache because the cache hit rate is too low
             usecache = false
         end
@@ -176,7 +176,7 @@ function fillcolumn!(col::Vector{Union{String,Missing}}, nvals::Int, mem::Memory
                 s = unsafe_string(mem.ptr + start - 1, length)
             end
             col[end-nvals+i] = s
-            if usecache && i % 4096 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
+            if usecache && i % 512 == 0 && 10 * cache.stats.hit < cache.stats.hit + cache.stats.miss
                 # stop using cache because the cache hit rate is too low
                 usecache = false
             end
