@@ -119,6 +119,10 @@ line just after the skipped lines is considered as a header line if the
 `skipblank` specifies whether the parser ignores blank lines. If `skipblank` is
 false, encountering a blank line throws an exception.
 
+`comment` specifies the leading sequence of comment lines. If it is a non-empty
+string, text lines that start with the sequence will be skipped as comments.
+The default value (empty string) does not skip any lines as comments.
+
 
 ## Column names
 

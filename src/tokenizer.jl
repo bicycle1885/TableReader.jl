@@ -31,6 +31,8 @@ struct ParserParameters
             throw(ArgumentError("quoting with space and space trimming are exclusive"))
         elseif skip < 0
             throw(ArgumentError("skip cannot be negative"))
+        elseif occursin(r"[\r\n]", comment)
+            throw(ArgumentError("comment cannot contain newline characters"))
         elseif chunkbits < 0
             throw(ArgumentError("chunkbits cannot be negative"))
         elseif chunkbits != 0 && !(MINIMUM_CHUNK_BITS ≤ chunkbits ≤ MAXIMUM_CHUNK_BITS)

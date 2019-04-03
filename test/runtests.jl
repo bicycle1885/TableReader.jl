@@ -742,6 +742,9 @@ end
         df = readcsv(IOBuffer(data), comment = "##")
         @test df[:col1] == ["foo", "#foo"]
         @test df[:col2] == ["bar", "#bar"]
+
+        @test_throws ArgumentError("comment cannot contain newline characters") readcsv(IOBuffer(data), comment = "\n")
+        @test_throws ArgumentError("comment cannot contain newline characters") readcsv(IOBuffer(data), comment = "\r")
     end
 
     @testset "malformed data" begin
