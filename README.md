@@ -1,5 +1,6 @@
 # TableReader.jl
 
+[![Docs Latest][docs-latest-img]][docs-latest-url]
 [![Build Status](https://travis-ci.com/bicycle1885/TableReader.jl.svg?branch=master)](https://travis-ci.com/bicycle1885/TableReader.jl)
 [![Codecov](https://codecov.io/gh/bicycle1885/TableReader.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/bicycle1885/TableReader.jl)
 
@@ -149,3 +150,5 @@ Also, the size of a chunk is limited up to 64 GiB; you cannot disable chunking
 if the data size is larger than that.
 
 [transcodingstreams-url]: https://github.com/bicycle1885/TranscodingStreams.jl
+[docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
+[docs-latest-url]: https://bicycle1885.github.io/TableReader.jl/latest
