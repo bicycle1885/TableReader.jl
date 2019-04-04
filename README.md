@@ -11,7 +11,7 @@ Features:
 - Transparently decompresses gzip, xz, and zstd data.
 - Read data from a local file, a remote file, or a running process.
 
-Here is a quick benchmarking result:
+Here is a quick benchmark of start-up time:
 
     ~/w/TableReader (master|…) $ julia
                    _
@@ -23,68 +23,33 @@ Here is a quick benchmarking result:
      _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
     |__/                   |
 
-    julia> using TableReader, BenchmarkTools
+    julia> using TableReader
 
-    julia> @time readcsv("iris.csv");  # start-up time
-      1.771506 seconds (2.74 M allocations: 136.838 MiB, 2.30% gc time)
-
-    julia> @benchmark readcsv("iris.csv")  # parsing speed
-    BenchmarkTools.Trial:
-      memory estimate:  1.03 MiB
-      allocs estimate:  94
-      --------------
-      minimum time:     82.711 μs (0.00% GC)
-      median time:      88.433 μs (0.00% GC)
-      mean time:        107.542 μs (12.68% GC)
-      maximum time:     46.517 ms (99.56% GC)
-      --------------
-      samples:          10000
-      evals/sample:     1
+    julia> @time readcsv("data/iris.csv");  # start-up time
+      2.301008 seconds (2.80 M allocations: 139.657 MiB, 1.82% gc time)
 
     ~/w/TableReader (master|…) $ julia -q
-    julia> using CSV, DataFrames, BenchmarkTools
+    julia> using CSV, DataFrames
 
-    julia> @time DataFrame(CSV.File("iris.csv"));
-      7.892412 seconds (33.59 M allocations: 1.408 GiB, 8.70% gc time)
-
-    julia> @benchmark DataFrame(CSV.File("iris.csv"))
-    BenchmarkTools.Trial:
-      memory estimate:  25.28 KiB
-      allocs estimate:  356
-      --------------
-      minimum time:     209.578 μs (0.00% GC)
-      median time:      213.480 μs (0.00% GC)
-      mean time:        233.416 μs (3.66% GC)
-      maximum time:     52.844 ms (93.27% GC)
-      --------------
-      samples:          10000
-      evals/sample:     1
+    julia> @time DataFrame(CSV.File("data/iris.csv"));  # start-up time
+      7.443172 seconds (33.26 M allocations: 1.389 GiB, 9.05% gc time)
 
     ~/w/TableReader (master|…) $ julia -q
-    julia> using TextParse, BenchmarkTools
+    julia> using CSVFiles, DataFrames
 
-    julia> @time csvread("iris.csv");
-      4.743130 seconds (14.31 M allocations: 681.774 MiB, 6.98% gc time)
+    julia> @time DataFrame(load("data/iris.csv"));  # start-up time
+     12.578236 seconds (47.81 M allocations: 2.217 GiB, 9.87% gc time)
 
-    julia> @benchmark csvread("iris.csv")
-    BenchmarkTools.Trial:
-      memory estimate:  127.16 KiB
-      allocs estimate:  2331
-      --------------
-      minimum time:     192.463 μs (0.00% GC)
-      median time:      199.889 μs (0.00% GC)
-      mean time:        225.422 μs (7.25% GC)
-      maximum time:     45.882 ms (99.21% GC)
-      --------------
-      samples:          10000
-      evals/sample:     1
+And the parsing throughput of TableReader.jl is often ~1.5-3.0 times faster
+than those of pandas and other Julia packages. See [this
+post](https://discourse.julialang.org/t/ann-tablereader-jl-a-fast-and-simple-csv-parser/22335)
+for more selling points.
 
 
 ## Installation
 
-Run the following command in the package management mode in your Julia REPL:
-
-    pkg> add TableReader
+Start a new session by the `julia` command, hit the <kbd>]</kbd> key to change
+the mode, and run `add TableReader` in the `pkg>` prompt.
 
 
 ## Usage
