@@ -213,7 +213,7 @@ longer than 16 MiB. Trying to read such a file will result in error.
 function readdlm end
 
 """
-    readcsv(filename or IO object; delim = ',', <keyword arguments>)
+    readcsv(filename, command, or IO object; delim = ',', <keyword arguments>)
 
 Read a CSV (comma-separated values) text file.
 
@@ -223,7 +223,7 @@ See `readdlm` for details.
 function readcsv end
 
 """
-    readtsv(filename or IO object; delim = '\\t', <keyword arguments>)
+    readtsv(filename, command, or IO object; delim = '\\t', <keyword arguments>)
 
 Read a TSV (tab-separated values) text file.
 
