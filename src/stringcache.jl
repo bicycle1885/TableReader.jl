@@ -33,7 +33,7 @@ struct StringCache
 
     function StringCache(maxsize::Int)
         @assert maxsize > 0
-        return new(maxsize, Record[], Stats(0, 0))
+        return new(maxsize, [EMPTY_RECORD], Stats(0, 0))
     end
 end
 
@@ -55,9 +55,15 @@ end
 function allocate!(cache::StringCache, p::Ptr{UInt8}, length::Int64)
     meta = length % UInt64 | UInt64(unsafe_load(p)) << 56 | UInt64(unsafe_load(p + length - 1)) << 48
     records = cache.records
-    n = Base.length(records)
     stats = cache.stats
-    @inbounds for i in 1:n
+    # unroll the first loop of the linear search for performance
+    @inbounds r = records[1]
+    if r.meta == meta && memcmp(p, pointer(r.data), length) == 0
+        stats.hit += 1
+        return r.data
+    end
+    n = Base.length(records)
+    @inbounds for i in 2:n
         r = records[i]
         if r.meta == meta && memcmp(p, pointer(r.data), length) == 0
             stats.hit += 1
