@@ -16,10 +16,10 @@ uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 version = "0.4.3"
 
 [[CSVFiles]]
-deps = ["DataValues", "FileIO", "HTTP", "IterableTables", "IteratorInterfaceExtensions", "TableShowUtils", "TableTraits", "TableTraitsUtils", "Test", "TextParse"]
-git-tree-sha1 = "0cd915ad1833370c7881d574c5096e0d14755217"
+deps = ["CodecZlib", "DataValues", "FileIO", "HTTP", "IterableTables", "IteratorInterfaceExtensions", "TableShowUtils", "TableTraits", "TableTraitsUtils", "Test", "TextParse"]
+git-tree-sha1 = "34ea1fead42c429d1026903077c1a2c3ae84c957"
 uuid = "5d742f6a-9f54-50ce-8119-2520741973ca"
-version = "0.14.0"
+version = "0.15.0"
 
 [[CategoricalArrays]]
 deps = ["Compat", "Future", "Missings", "Printf", "Reexport", "Requires"]
@@ -88,26 +88,26 @@ deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[DoubleFloats]]
-deps = ["GenericLinearAlgebra", "LinearAlgebra", "Polynomials", "Random", "Test"]
-git-tree-sha1 = "d92d95cc11fc36881f8982e0de1b0a3d7c11eb76"
+deps = ["GenericSVD", "LinearAlgebra", "Polynomials", "Random", "Test"]
+git-tree-sha1 = "a8f6722b5e6da57ef46cbcd32faafdf4e84ac920"
 uuid = "497a8b3b-efae-58df-a0af-a86822472b78"
-version = "0.7.17"
+version = "0.7.18"
 
 [[FileIO]]
 deps = ["Pkg", "Random", "Test"]
-git-tree-sha1 = "c94b0787956629036fb2b20fccde9e52b89d079a"
+git-tree-sha1 = "da32159d4a2e526338506685e280e39ed2f18961"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.0.5"
+version = "1.0.6"
 
 [[Future]]
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
-[[GenericLinearAlgebra]]
-deps = ["LinearAlgebra", "Printf", "Random", "Test"]
-git-tree-sha1 = "ca235f9c4652b31525232a36d7832f5ee681d76a"
-uuid = "14197337-ba66-59df-a3e3-ca00e7dcff7a"
-version = "0.1.0"
+[[GenericSVD]]
+deps = ["LinearAlgebra", "Random", "Test"]
+git-tree-sha1 = "8aa93c3f3d81562a8962047eafcc5712af0a0f59"
+uuid = "01680d73-4ee2-5a08-a1aa-533608c188bb"
+version = "0.2.1"
 
 [[HTTP]]
 deps = ["Base64", "Dates", "Distributed", "IniFile", "MbedTLS", "Random", "Sockets", "Test"]
@@ -271,10 +271,12 @@ uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 version = "0.29.0"
 
 [[TableReader]]
-deps = ["CodecXz", "CodecZlib", "CodecZstd", "DataFrames", "Dates", "Printf", "Profile", "Test", "TranscodingStreams", "Unicode"]
-git-tree-sha1 = "5acf324be9a9788f0734aafbc9785435b2041d6d"
+deps = ["CodecXz", "CodecZlib", "CodecZstd", "DataFrames", "Dates", "Printf", "TranscodingStreams", "Unicode"]
+git-tree-sha1 = "7d5c9db6016ac018c5af6dfde716abe01a26e8b3"
+repo-rev = "benchmark"
+repo-url = ".."
 uuid = "70df011a-6618-58d7-8e16-3cf9e384cb47"
-version = "0.1.0"
+version = "0.3.0"
 
 [[TableShowUtils]]
 deps = ["DataValues", "Dates", "JSON", "Markdown", "Test"]

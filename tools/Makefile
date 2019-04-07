@@ -47,7 +47,7 @@ results/%.pandas.csv: data/%.csv
 # Special parameters
 
 results/parking-citations.tablereader.csv: data/parking-citations.csv
-	julia benchmark.jl $< "(chunksize = 0,)" >$@
+	julia benchmark.jl $< "(chunkbits = 0,)" >$@
 
 results/parking-citations.csv.csv: data/parking-citations.csv
 	julia benchmark.csv.jl $< "(types = Dict(1 => String, 8 => Union{String,Missing}),)" >$@
