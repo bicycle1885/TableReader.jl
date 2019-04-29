@@ -859,6 +859,38 @@ end
         @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunkbits = -1)
         @test_throws ArgumentError readdlm(IOBuffer(""), delim = ',', chunkbits = 100)
     end
+
+    @testset "delimiter detection" begin
+        # comma delimited
+        data = """
+        col1,col2,col3
+        1,2,3
+        """
+        df = readdlm(IOBuffer(data))
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+
+        # tab delimited
+        data = """
+        col1\tcol2\tcol3
+        1\t2\t3
+        """
+        df = readdlm(IOBuffer(data))
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+
+        # pipe delimited
+        data = """
+        col1|col2|col3
+        1|2|3
+        """
+        df = readdlm(IOBuffer(data))
+        @test df[:col1] == [1]
+        @test df[:col2] == [2]
+        @test df[:col3] == [3]
+    end
 end
 
 @testset "colnames" begin

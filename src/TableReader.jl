@@ -51,7 +51,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
 
 """
     readdlm(filename, command, or IO object;
-            delim,
+            delim = nothing,
             quot = '"',
             trim = true,
             lzstring = true,
@@ -98,7 +98,8 @@ as file names does not affect the detection.
 ## Parser parameters
 
 `delim` specifies the field delimiter in a line.  This cannot be the same
-character as `quot`.  Currently, the following delimiters are allowed:
+character as `quot`.  If `delim` is `nothing`, the parser tries to guess a
+delimiter from data.  Currently, the following delimiters are allowed:
 $(join(repr.(ALLOWED_DELIMITERS), ", ")).
 
 `quot` specifies the quotation character to enclose a field. This cannot be the
@@ -235,11 +236,7 @@ function readtsv end
 for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     # prepare keyword arguments
     kwargs = Expr[]
-    if delim === nothing
-        push!(kwargs, :(delim::Char))
-    else
-        push!(kwargs, Expr(:kw, :(delim::Char), delim))
-    end
+    push!(kwargs, Expr(:kw, :(delim::Union{Char,Nothing}), delim))  # delim::Union{Char,Nothing} = $(delim)
     push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
     push!(kwargs, Expr(:kw, :(lzstring::Bool), true))  # lzstring::Bool = true
@@ -354,9 +351,29 @@ end
 # The main function of parsing a character delimited file.
 # `stream` is asuumed to be an input stream of plain text.
 function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
-    # Determine column names
+    # Skip lines.
     line = skiplines(stream, params.skip) + 1
     line += skip_unwanted_lines(stream, params)
+
+    # Determine delimiter.
+    if params.delim === nothing
+        params = ParserParameters(
+            Char(guessdelimiter(stream, params)),
+            Char(params.quot),
+            params.trim,
+            params.lzstring,
+            params.skip,
+            params.skipblank,
+            params.comment,
+            params.colnames,
+            params.normalizenames,
+            params.hasheader,
+            params.chunkbits,
+        )
+    end
+    @assert params.delim isa UInt8
+
+    # Determine column names
     mem = bufferlines(stream)
     if params.hasheader
         if params.colnames === nothing
@@ -688,6 +705,22 @@ function skipcommentlines(stream::TranscodingStream, comment::String)
         skipped += 1
     end
     return skipped
+end
+
+# Guess the delimiter byte from data.  The current logic is very simple:
+# choosing the most frequent one in the first line from the list of candidates.
+function guessdelimiter(stream::TranscodingStream, params::ParserParameters)
+    mem = bufferlines(stream)
+    n_max = 0
+    delim = UInt8(',')
+    for d in UInt8.((',', '\t', '|', ';', ':'))
+        n = countbytesline(mem, d)
+        if n > n_max
+            n_max = n
+            delim = d
+        end
+    end
+    return delim
 end
 
 # Buffer lines and return the memory view and the last newline position.
