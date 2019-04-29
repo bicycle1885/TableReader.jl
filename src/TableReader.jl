@@ -9,7 +9,7 @@ using Dates:
 using Unicode:
     isletter
 using DataFrames:
-    DataFrame
+    DataFrame!
 using TranscodingStreams:
     TranscodingStreams,
     TranscodingStream,
@@ -423,7 +423,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
     _, i, _ = scanline!(tokens, 1, mem, 0, line, params)
     if i == 1 && location(tokens[1,1])[2] == 0
         # no data
-        return DataFrame([[] for _ in 1:length(colnames)], colnames, makeunique = true)
+        return DataFrame!([[] for _ in 1:length(colnames)], colnames, makeunique = true)
     elseif i == ncols
         # the header and the first row have the same number of columns
     elseif i == ncols + 1
@@ -542,7 +542,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
         colnames = [normalizename(String(name)) for name in colnames]
     end
 
-    return DataFrame(columns, colnames, makeunique = true)
+    return DataFrame!(columns, colnames, makeunique = true)
 end
 
 # Count the number of `byte` in a memory block.
