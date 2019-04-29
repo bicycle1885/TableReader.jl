@@ -487,7 +487,7 @@ function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
                         "try larger chunkbits or chunkbits = 0 to disable chunking")))
                 end
                 n_rows = length(col)
-                if T <: S
+                if U <: S
                     resize!(col, n_rows + n_new_rows)
                 else
                     col = copyto!(Vector{U}(undef, n_rows + n_new_rows), 1, col, 1, n_rows)
