@@ -51,7 +51,7 @@ const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigi
 
 """
     readdlm(filename, command, or IO object;
-            delim,
+            delim = nothing,
             quot = '"',
             trim = true,
             lzstring = true,
@@ -98,7 +98,8 @@ as file names does not affect the detection.
 ## Parser parameters
 
 `delim` specifies the field delimiter in a line.  This cannot be the same
-character as `quot`.  Currently, the following delimiters are allowed:
+character as `quot`.  If `delim` is `nothing`, the parser tries to guess a
+delimiter from data.  Currently, the following delimiters are allowed:
 $(join(repr.(ALLOWED_DELIMITERS), ", ")).
 
 `quot` specifies the quotation character to enclose a field. This cannot be the
