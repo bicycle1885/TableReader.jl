@@ -3,7 +3,7 @@
 
 # A set of parser parameters.
 struct ParserParameters
-    delim::UInt8
+    delim::Union{UInt8,Nothing}
     quot::UInt8
     trim::Bool
     lzstring::Bool
@@ -15,11 +15,11 @@ struct ParserParameters
     hasheader::Bool
     chunkbits::Int
 
-    function ParserParameters(delim::Char, quot::Char, trim::Bool, lzstring::Bool,
+    function ParserParameters(delim::Union{Char,Nothing}, quot::Char, trim::Bool, lzstring::Bool,
                               skip::Integer, skipblank::Bool, comment::String,
                               colnames::Any, normalizenames::Bool,
                               hasheader::Bool, chunkbits::Integer)
-        if delim ∉ ALLOWED_DELIMITERS
+        if delim ∉ ALLOWED_DELIMITERS && delim !== nothing
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
             throw(ArgumentError("quotation character $(repr(quot)) is not allowed"))
@@ -42,7 +42,7 @@ struct ParserParameters
             colnames = Symbol.(collect(colnames))
         end
         return new(
-            UInt8(delim),
+            delim isa Char ? UInt8(delim) : delim,
             UInt8(quot),
             trim,
             lzstring,
