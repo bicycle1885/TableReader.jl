@@ -258,7 +258,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
+            params = LexerParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             if occursin(r"^\w+://", filename)  # URL-like filename
                 curl = find_curl()
                 if curl === nothing
@@ -279,7 +279,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
+            params = LexerParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             return open(proc -> readdlm_internal(wrapstream(proc, params), params), cmd)
         end
 
@@ -288,14 +288,14 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
                 @warn "the chunksize parameter is deprecated; use chunkbits instead (note that chunksize = 2^chunkbits)"
                 chunkbits = chunksize == 0 ? 0 : trailing_zeros(nextpow(2, chunksize))
             end
-            params = ParserParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
+            params = LexerParameters(delim, quot, trim, lzstring, skip, skipblank, comment, colnames, normalizenames, hasheader, chunkbits)
             return readdlm_internal(wrapstream(file, params), params)
         end
     end
 end
 
 # Wrap a stream by TranscodingStream.
-function wrapstream(stream::IO, params::ParserParameters)
+function wrapstream(stream::IO, params::LexerParameters)
     bufsize = 2^max(params.chunkbits, MINIMUM_CHUNK_BITS)
     if !applicable(mark, stream) || !applicable(reset, stream)
         stream = NoopStream(stream, bufsize = bufsize)
@@ -350,14 +350,14 @@ end
 
 # The main function of parsing a character delimited file.
 # `stream` is asuumed to be an input stream of plain text.
-function readdlm_internal(stream::TranscodingStream, params::ParserParameters)
+function readdlm_internal(stream::TranscodingStream, params::LexerParameters)
     # Skip lines.
     line = skiplines(stream, params.skip) + 1
     line += skip_unwanted_lines(stream, params)
 
     # Determine delimiter.
     if params.delim === nothing
-        params = ParserParameters(
+        params = LexerParameters(
             Char(guessdelimiter(stream, params)),
             Char(params.quot),
             params.trim,
@@ -633,7 +633,7 @@ function skiplines(stream::TranscodingStream, skip::Int)
 end
 
 # Skip blank and/or comment lines if required.
-function skip_unwanted_lines(stream::TranscodingStream, params::ParserParameters)
+function skip_unwanted_lines(stream::TranscodingStream, params::LexerParameters)
     skipped = 0
     @label loop
     n = 0
@@ -709,7 +709,7 @@ end
 
 # Guess the delimiter byte from data.  The current logic is very simple:
 # choosing the most frequent one in the first line from the list of candidates.
-function guessdelimiter(stream::TranscodingStream, params::ParserParameters)
+function guessdelimiter(stream::TranscodingStream, params::LexerParameters)
     mem = bufferlines(stream)
     n_max = 0
     delim = UInt8(',')
@@ -777,8 +777,8 @@ end
 # Generated from tools/snoop.jl.
 function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
-    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, TableReader.ParserParameters})
-    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.scanline!), Array{TableReader.Token, 2}, Int64, TranscodingStreams.Memory, Int64, Int64, TableReader.LexerParameters})
+    precompile(Tuple{typeof(TableReader.scanheader), TranscodingStreams.Memory, TableReader.LexerParameters})
     precompile(Tuple{typeof(TableReader.bufferlines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.checkformat), Base.IOStream})
     precompile(Tuple{getfield(TableReader, Symbol("##24#29")), Base.Process})
@@ -787,21 +787,21 @@ function _precompile_()
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Int64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{Float64, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
-    precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.readdlm_internal), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.LexerParameters})
     precompile(Tuple{typeof(TableReader.qstring), TranscodingStreams.Memory, Int64, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.summarizecolumns), Array{TableReader.Token, 2}, Int64})
     precompile(Tuple{typeof(TableReader.checkformat), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.Process}})
     precompile(Tuple{typeof(TableReader.parse_date), Array{String, 1}})
     precompile(Tuple{typeof(TableReader.parse_datetime), Array{String, 1}, Bool})
-    precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.ParserParameters})
-    precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.Process, TableReader.LexerParameters})
+    precompile(Tuple{typeof(TableReader.wrapstream), Base.IOStream, TableReader.LexerParameters})
     precompile(Tuple{typeof(TableReader.checkformat), Base.Process})
     precompile(Tuple{getfield(TableReader, Symbol("##25#30")), Base.IOStream})
     precompile(Tuple{typeof(TableReader.allocate!), TableReader.StringCache, Ptr{UInt8}, Int64})
     precompile(Tuple{typeof(TableReader.fillcolumn!), Array{String, 1}, Int64, TranscodingStreams.Memory, Array{TableReader.Token, 2}, Int64, UInt8})
     precompile(Tuple{typeof(TableReader.is_date_like), Array{String, 1}})
     precompile(Tuple{typeof(TableReader.is_datetime_like), Array{String, 1}})
-    precompile(Tuple{typeof(TableReader.skip_unwanted_lines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.ParserParameters})
+    precompile(Tuple{typeof(TableReader.skip_unwanted_lines), TranscodingStreams.TranscodingStream{TranscodingStreams.Noop, Base.IOStream}, TableReader.LexerParameters})
     precompile(Tuple{typeof(TableReader.countbytes), TranscodingStreams.Memory, UInt8})
     precompile(Tuple{typeof(TableReader.parse_datetime), Array{Union{Base.Missing, String}, 1}, Bool})
     precompile(Tuple{getfield(TableReader, Symbol("##readcsv#14")), Char, Char, Bool, Bool, Int64, Bool, String, Nothing, Bool, Bool, Int64, Nothing, typeof(TableReader.readcsv), String})
