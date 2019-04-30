@@ -1,8 +1,8 @@
 # Tokenize
 # ========
 
-# A set of parser parameters.
-struct ParserParameters
+# A set of lexing parameters.
+struct LexerParameters
     delim::Union{UInt8,Nothing}
     quot::UInt8
     trim::Bool
@@ -15,10 +15,11 @@ struct ParserParameters
     hasheader::Bool
     chunkbits::Int
 
-    function ParserParameters(delim::Union{Char,Nothing}, quot::Char, trim::Bool, lzstring::Bool,
-                              skip::Integer, skipblank::Bool, comment::String,
-                              colnames::Any, normalizenames::Bool,
-                              hasheader::Bool, chunkbits::Integer)
+    function LexerParameters(
+            delim::Union{Char,Nothing}, quot::Char, trim::Bool, lzstring::Bool,
+            skip::Integer, skipblank::Bool, comment::String,
+            colnames::Any, normalizenames::Bool,
+            hasheader::Bool, chunkbits::Integer)
         if delim ∉ ALLOWED_DELIMITERS && delim !== nothing
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
         elseif quot ∉ ALLOWED_QUOTECHARS
@@ -193,7 +194,7 @@ macro endheadertoken()
     end |> esc
 end
 
-function scanheader(mem::Memory, params::ParserParameters)
+function scanheader(mem::Memory, params::LexerParameters)
     # Check parameters.
     delim, quot, trim = params.delim, params.quot, params.trim
     @assert delim != quot
@@ -386,8 +387,8 @@ function scanline!(
         tokens::Matrix{Token}, row::Int,
         # input info
         mem::Memory, pos::Int, line::Int,
-        # parser parameters
-        params::ParserParameters
+        # lexer parameters
+        params::LexerParameters
     )
 
     # Check parameters.
