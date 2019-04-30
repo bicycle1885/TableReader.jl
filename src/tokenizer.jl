@@ -370,12 +370,11 @@ end
 
 macro endtoken()
     quote
-        if i > ncols
+        if i ≥ ncols
             msg = "unexpected number of columns at line $(line)"
             @goto ERROR
         end
-        @inbounds tokens[i,row] = token
-        i += 1
+        @inbounds tokens[(i+=1)+base] = token
         quoted = false
         qstring = false
     end |> esc
@@ -407,7 +406,8 @@ function scanline!(
     blank = true  # blank line?
     msg = ""  # error message
     start = 0  # the starting position of a token
-    i = 1  # the column of a token
+    i = 0  # the column of a token
+    base = ncols * (row - 1)  # the base index of tokens in the current row
 
     if !isempty(params.comment)
         q = 1
@@ -496,12 +496,12 @@ function scanline!(
         elseif UInt8('!') ≤ c ≤ UInt8('~')
             @goto STRING
         elseif c == LF
-            if i == ncols
+            if i + 1 == ncols
                 @recordtoken MISSING
             end
             @goto LF
         elseif c == CR
-            if i == ncols
+            if i + 1 == ncols
                 @recordtoken MISSING
             end
             @goto CR
@@ -1063,7 +1063,7 @@ function scanline!(
     @label ERROR
     if isempty(msg)
         # default error message
-        msg = "invalid file format at line $(line), column $(i) "
+        msg = "invalid file format at line $(line), column $(i + 1) "
         if c ≤ 0x7f  # ASCII
             msg = string(msg, "(found $(repr(Char(c))))")
         else
@@ -1102,5 +1102,5 @@ function scanline!(
     end
 
     @label END
-    return pos, i - 1, params.skipblank && blank
+    return pos, i, params.skipblank && blank
 end
