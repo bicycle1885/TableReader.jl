@@ -1,6 +1,7 @@
 # TableReader.jl
 
-[![Docs Latest][docs-latest-img]][docs-latest-url]
+[![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://bicycle1885.github.io/TableReader.jl/stable)
+[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://bicycle1885.github.io/TableReader.jl/latest)
 [![Build Status](https://travis-ci.com/bicycle1885/TableReader.jl.svg?branch=master)](https://travis-ci.com/bicycle1885/TableReader.jl)
 [![Codecov](https://codecov.io/gh/bicycle1885/TableReader.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/bicycle1885/TableReader.jl)
 
@@ -142,7 +143,3 @@ than or equal to 16 MiB will result in parsing failure. This is not likely to
 happen, but please be careful if, for example, there are columns that contain
 long strings.  Also, the size of a chunk is limited up to 64 GiB; you cannot
 disable chunking if the data size is larger than that.
-
-[transcodingstreams-url]: https://github.com/bicycle1885/TranscodingStreams.jl
-[docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
-[docs-latest-url]: https://bicycle1885.github.io/TableReader.jl/latest
