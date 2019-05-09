@@ -13,16 +13,16 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Test"]
-
 [compat]
-julia = "1"
 CodecXz = ">= 0.5"
 CodecZlib = ">= 0.5"
 CodecZstd = ">= 0.5"
 DataFrames = ">= 0.18"
 TranscodingStreams = ">= 0.9"
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
