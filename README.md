@@ -65,6 +65,9 @@ using TableReader
 # Read a CSV file and return a DataFrame object.
 dataframe = readcsv("somefile.csv")
 
+# Automatic delimiter detection.
+dataframe = readdlm("somefile.txt")
+
 # Read gzip/xz/zstd compressed files.
 dataframe = readcsv("somefile.csv.gz")
 
