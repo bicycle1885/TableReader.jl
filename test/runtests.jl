@@ -841,6 +841,18 @@ end
         @test df[:col1] == ["\"foo\""]
         @test df[:col2] == ["\"bar\""]
         @test df[:col3] == ["\"baz\""]
+
+        data = """
+        col1,\xffcol2,col3
+        "foo","bar","baz"
+        """
+        @test_throws TableReader.ReadError("invalid file header format") readtsv(IOBuffer(data), quot = nothing)
+
+        data = """
+        col1,col2,col3
+        "foo",\xff"bar","baz"
+        """
+        @test_throws TableReader.ReadError("invalid file format at line 2, column 1 (found 0xff)") readtsv(IOBuffer(data), quot = nothing)
     end
 end
 

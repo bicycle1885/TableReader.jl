@@ -214,6 +214,10 @@ function scanheader(mem::Memory, params::LexerParameters)
     @state BEGIN begin
         @begintoken
         if c == quot
+            if c == NO_QUOTE
+                # invalid UTF-8 encoding
+                @goto ERROR
+            end
             if quoted
                 @recordtoken STRING
                 @goto QUOTE_END
@@ -433,13 +437,16 @@ function scanline!(
         blank &= (params.trim && c == SP) || c == CR || c == LF
         @begintoken
         if c == quot
+            if c == NO_QUOTE
+                # invalid UTF-8 encoding
+                @goto ERROR
+            end
             if quoted
                 @recordtoken MISSING
                 @goto QUOTE_END
-            else
-                quoted = true
-                @goto BEGIN
             end
+            quoted = true
+            @goto BEGIN
         elseif c == delim
             if quoted
                 @goto STRING
