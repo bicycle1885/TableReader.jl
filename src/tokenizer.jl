@@ -16,15 +16,15 @@ struct LexerParameters
     chunkbits::Int
 
     function LexerParameters(
-            delim::Union{Char,Nothing}, quot::Char, trim::Bool, lzstring::Bool,
+            delim::Union{Char,Nothing}, quot::Union{Char,Nothing}, trim::Bool, lzstring::Bool,
             skip::Integer, skipblank::Bool, comment::String,
             colnames::Any, normalizenames::Bool,
             hasheader::Bool, chunkbits::Integer)
         if delim ∉ ALLOWED_DELIMITERS && delim !== nothing
             throw(ArgumentError("delimiter $(repr(delim)) is not allowed"))
-        elseif quot ∉ ALLOWED_QUOTECHARS
+        elseif quot ∉ ALLOWED_QUOTECHARS && quot !== nothing
             throw(ArgumentError("quotation character $(repr(quot)) is not allowed"))
-        elseif delim == quot
+        elseif delim == quot && !(delim === quot === nothing)
             throw(ArgumentError("delimiter and quotation character cannot be the same character"))
         elseif delim == ' ' && trim
             throw(ArgumentError("delimiting with space and space trimming are exclusive"))
@@ -44,7 +44,7 @@ struct LexerParameters
         end
         return new(
             delim isa Char ? UInt8(delim) : delim,
-            UInt8(quot),
+            quot isa Char ? UInt8(quot) : NO_QUOTECHAR,
             trim,
             lzstring,
             skip,
@@ -214,6 +214,10 @@ function scanheader(mem::Memory, params::LexerParameters)
     @state BEGIN begin
         @begintoken
         if c == quot
+            if c == NO_QUOTECHAR
+                # invalid UTF-8 encoding
+                @goto ERROR
+            end
             if quoted
                 @recordtoken STRING
                 @goto QUOTE_END
@@ -433,13 +437,16 @@ function scanline!(
         blank &= (params.trim && c == SP) || c == CR || c == LF
         @begintoken
         if c == quot
+            if c == NO_QUOTECHAR
+                # invalid UTF-8 encoding
+                @goto ERROR
+            end
             if quoted
                 @recordtoken MISSING
                 @goto QUOTE_END
-            else
-                quoted = true
-                @goto BEGIN
             end
+            quoted = true
+            @goto BEGIN
         elseif c == delim
             if quoted
                 @goto STRING
