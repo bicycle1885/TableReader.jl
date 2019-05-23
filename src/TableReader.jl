@@ -49,8 +49,8 @@ const CHARS_PRINT = ' ':'~'
 const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
 const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]...)
 
-# A special byte that never occurs in valid UTF-8 text.
-const NO_QUOTE = 0xff
+# Special mark that never occurs in valid UTF-8 text.
+const NO_QUOTECHAR = 0xff
 
 """
     readdlm(filename, command, or IO object;

@@ -44,7 +44,7 @@ struct LexerParameters
         end
         return new(
             delim isa Char ? UInt8(delim) : delim,
-            quot isa Char ? UInt8(quot) : NO_QUOTE,
+            quot isa Char ? UInt8(quot) : NO_QUOTECHAR,
             trim,
             lzstring,
             skip,
@@ -214,7 +214,7 @@ function scanheader(mem::Memory, params::LexerParameters)
     @state BEGIN begin
         @begintoken
         if c == quot
-            if c == NO_QUOTE
+            if c == NO_QUOTECHAR
                 # invalid UTF-8 encoding
                 @goto ERROR
             end
@@ -437,7 +437,7 @@ function scanline!(
         blank &= (params.trim && c == SP) || c == CR || c == LF
         @begintoken
         if c == quot
-            if c == NO_QUOTE
+            if c == NO_QUOTECHAR
                 # invalid UTF-8 encoding
                 @goto ERROR
             end
