@@ -49,6 +49,9 @@ const CHARS_PRINT = ' ':'~'
 const ALLOWED_DELIMITERS = tuple(['\t'; CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]]...)
 const ALLOWED_QUOTECHARS = tuple(CHARS_PRINT[.!(isletter.(CHARS_PRINT) .| isdigit.(CHARS_PRINT))]...)
 
+# A special byte that never occurs in valid UTF-8 text.
+const NO_QUOTE = 0xff
+
 """
     readdlm(filename, command, or IO object;
             delim = nothing,
@@ -103,8 +106,9 @@ delimiter from data.  Currently, the following delimiters are allowed:
 $(join(repr.(ALLOWED_DELIMITERS), ", ")).
 
 `quot` specifies the quotation character to enclose a field. This cannot be the
-same character as `delim`. Currently, the following quotation characters are
-allowed: $(join(repr.(ALLOWED_QUOTECHARS), ", ")).
+same character as `delim`. If `quot` is `nothing`, no characters are recognized
+as a quotation mark. Currently, the following quotation characters are allowed:
+$(join(repr.(ALLOWED_QUOTECHARS), ", ")).
 
 `trim` specifies whether the parser trims space (0x20) characters around a field.
 If `trim` is true, `delim` and `quot` cannot be a space character.
@@ -237,7 +241,7 @@ for (fname, delim) in [(:readdlm, nothing), (:readcsv, ','), (:readtsv, '\t')]
     # prepare keyword arguments
     kwargs = Expr[]
     push!(kwargs, Expr(:kw, :(delim::Union{Char,Nothing}), delim))  # delim::Union{Char,Nothing} = $(delim)
-    push!(kwargs, Expr(:kw, :(quot::Char), '"'))  # quot::Char = '"'
+    push!(kwargs, Expr(:kw, :(quot::Union{Char,Nothing}), '"'))  # quot::Union{Char,Nothing} = '"'
     push!(kwargs, Expr(:kw, :(trim::Bool), true))  # trim::Bool = true
     push!(kwargs, Expr(:kw, :(lzstring::Bool), true))  # lzstring::Bool = true
     push!(kwargs, Expr(:kw, :(skip::Integer), 0))  # skip::Integer = 0
