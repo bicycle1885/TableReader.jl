@@ -854,6 +854,18 @@ end
         """
         @test_throws TableReader.ReadError("invalid file format at line 2, column 1 (found 0xff)") readtsv(IOBuffer(data), quot = nothing)
     end
+
+    @testset "datetimes" begin
+        buf = IOBuffer("""
+        col1,col2
+        1,
+        2,2018-04-10T08:19:30.000
+        """)
+        df = readcsv(buf)
+        @test df[:col1] == [1, 2]
+        @test ismissing(df[1,:col2])
+        @test df[2,:col2] == DateTime(2018, 4, 10, 8, 19, 30)
+    end
 end
 
 @testset "readdlm" begin

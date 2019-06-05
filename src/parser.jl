@@ -267,6 +267,15 @@ function parse_datetime(s::String, hasT::Bool)
     end
 end
 
+function is_T_delimited(col::Vector{<:Union{String,Missing}})
+    for x in col
+        if !Base.ismissing(x)
+            return occursin('T', x)
+        end
+    end
+    return false
+end
+
 function is_datetime_like(col::Vector{<:Union{String,Missing}})
     # Check if the first three strings (if any) are datetime-like.
     i = 1
